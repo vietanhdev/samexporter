@@ -1,0 +1,4 @@
+[
+    {"type": "point", "data": [100, 100], "label": 0},
+    {"type": "rectangle", "data": [524, 628, 664, 788]}
+]

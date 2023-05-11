@@ -1,0 +1,7 @@
+.DS_Store
+original_models
+!original_models/.gitkeep
+output_models
+output_images
+*.egg-info
+*.pyc
