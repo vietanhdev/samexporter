@@ -2,14 +2,10 @@ from setuptools import find_packages, setup
 
 # Use README for long description
 long_description = open("README.md").read()
-long_description.replace(
-    "(sample_outputs/",
-    "(https://raw.githubusercontent.com/vietanhdev/samexporter/main/sample_outputs/",
-)
 
 setup(
     name="samexporter",
-    version="0.1.0",
+    version="0.1.1",
     description="Exporting Segment Anything models different formats",
     author="Viet Anh Nguyen",
     author_email="vietanh.dev@gmail.com",
