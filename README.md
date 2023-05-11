@@ -66,7 +66,7 @@ python -m samexporter.inference \
     --show
 ```
 
-![truck](sample_outputs/truck.png)
+![truck](https://raw.githubusercontent.com/vietanhdev/samexporter/main/sample_outputs/truck.png)
 
 ```bash
 python -m samexporter.inference \
@@ -78,7 +78,7 @@ python -m samexporter.inference \
     --show
 ```
 
-![plants_01](sample_outputs/plants_01.png)
+![plants_01](https://raw.githubusercontent.com/vietanhdev/samexporter/main/sample_outputs/plants_01.png)
 
 ```bash
 python -m samexporter.inference \
@@ -90,7 +90,7 @@ python -m samexporter.inference \
     --show
 ```
 
-![plants_02](sample_outputs/plants_02.png)
+![plants_02](https://raw.githubusercontent.com/vietanhdev/samexporter/main/sample_outputs/plants_02.png)
 
 ## Tips
 
@@ -101,9 +101,7 @@ python -m samexporter.inference \
 
 This package was originally developed for auto labeling feature in [AnyLabeling](https://github.com/vietanhdev/anylabeling) project. However, you can use it for other purposes.
 
-<a href="https://youtu.be/5qVJiYNX5Kk">
-  <img style="width: 800px; margin-left: auto; margin-right: auto; display: block;" alt="AnyLabeling-SegmentAnything" src="https://user-images.githubusercontent.com/18329471/236625792-07f01838-3f69-48b0-a12e-30bad27bd921.gif"/>
-</a>
+[![](https://user-images.githubusercontent.com/18329471/236625792-07f01838-3f69-48b0-a12e-30bad27bd921.gif)](https://youtu.be/5qVJiYNX5Kk)
 
 ## License
 

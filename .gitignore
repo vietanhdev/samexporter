@@ -5,3 +5,4 @@ output_models
 output_images
 *.egg-info
 *.pyc
+/dist
