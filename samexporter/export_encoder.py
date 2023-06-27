@@ -117,13 +117,14 @@ def run_export(
 
     output_names = ["image_embeddings"]
 
+    onnx_base = os.path.splitext(os.path.basename(output))[0]
     with warnings.catch_warnings():
         warnings.filterwarnings("ignore", category=torch.jit.TracerWarning)
         warnings.filterwarnings("ignore", category=UserWarning)
         print(f"Exporting onnx model to {output}...")
         if model_type == "vit_h":
             tmp_dir = mkdtemp()
-            tmp_model_path = os.path.join(tmp_dir, "model.onnx")
+            tmp_model_path = os.path.join(tmp_dir, f"{onnx_base}.onnx")
             torch.onnx.export(
                 onnx_model,
                 tuple(dummy_input.values()),
@@ -143,7 +144,7 @@ def run_export(
             convert_model_to_external_data(
                 onnx_model,
                 all_tensors_to_one_file=True,
-                location="model_data.bin",
+                location=f"{onnx_base}_data.bin",
                 size_threshold=1024,
                 convert_attribute=False,
             )

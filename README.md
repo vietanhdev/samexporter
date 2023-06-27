@@ -36,7 +36,7 @@ original_models
 
 ```bash
 python -m samexporter.export_encoder --checkpoint original_models/sam_vit_h_4b8939.pth \
-    --output output_models/sam_vit_h_4b8939.encoder/model.onnx \
+    --output output_models/sam_vit_h_4b8939.encoder.onnx \
     --model-type vit_h \
     --quantize-out output_models/sam_vit_h_4b8939.encoder.quant.onnx \
     --use-preprocess
@@ -58,7 +58,7 @@ Remove `--return-single-mask` if you want to return multiple masks.
 
 ```bash
 python -m samexporter.inference \
-    --encoder_model output_models/sam_vit_h_4b8939.encoder/model.onnx \
+    --encoder_model output_models/sam_vit_h_4b8939.encoder.onnx \
     --decoder_model output_models/sam_vit_h_4b8939.decoder.onnx \
     --image images/truck.jpg \
     --prompt images/truck_prompt.json \
@@ -70,7 +70,7 @@ python -m samexporter.inference \
 
 ```bash
 python -m samexporter.inference \
-    --encoder_model output_models/sam_vit_h_4b8939.encoder/model.onnx \
+    --encoder_model output_models/sam_vit_h_4b8939.encoder.onnx \
     --decoder_model output_models/sam_vit_h_4b8939.decoder.onnx \
     --image images/plants.png \
     --prompt images/plants_prompt1.json \
@@ -82,7 +82,7 @@ python -m samexporter.inference \
 
 ```bash
 python -m samexporter.inference \
-    --encoder_model output_models/sam_vit_h_4b8939.encoder/model.onnx \
+    --encoder_model output_models/sam_vit_h_4b8939.encoder.onnx \
     --decoder_model output_models/sam_vit_h_4b8939.decoder.onnx \
     --image images/plants.png \
     --prompt images/plants_prompt2.json \
