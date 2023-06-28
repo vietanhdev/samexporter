@@ -4,6 +4,13 @@ Exporting [Segment Anything](https://github.com/facebookresearch/segment-anythin
 
 The [Segment Anything repository](https://github.com/facebookresearch/segment-anything) does not have a way to export **encoder** to ONNX format. There are some pull requests for this feature, but they have not accepted by SAM authors. Therefore, I want to create an easy tool to export Segment Anything models to different output formats as an easy option.
 
+**Supported models:**
+
+- SAM ViT-B
+- SAM ViT-L
+- SAM ViT-H
+- MobileSAM*
+
 ## Installation
 
 From PyPi:
@@ -23,12 +30,14 @@ pip install -e .
 ## Usage
 
 - Download all models from [Segment Anything](https://github.com/facebookresearch/segment-anything) repository (*.pth).
+- Download MobileSAM from [https://github.com/ChaoningZhang/MobileSAM](https://github.com/ChaoningZhang/MobileSAM).
 
 ```text
 original_models
    + sam_vit_b_01ec64.pth
    + sam_vit_h_4b8939.pth
    + sam_vit_l_0b3195.pth
+   + mobile_sam.pt
    ...
 ```
 
@@ -91,6 +100,21 @@ python -m samexporter.inference \
 ```
 
 ![plants_02](https://raw.githubusercontent.com/vietanhdev/samexporter/main/sample_outputs/plants_02.png)
+
+
+**Short options:**
+
+- Convert all Meta's models to ONNX format:
+
+```bash
+bash convert_all_meta_sam.sh
+```
+
+- Convert MobileSAM to ONNX format:
+
+```bash
+bash convert_mobile_sam.sh
+```
 
 ## Tips
 

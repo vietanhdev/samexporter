@@ -2,6 +2,7 @@ import torch
 import onnx
 
 from segment_anything import sam_model_registry
+from samexporter.mobile_encoder.setup_mobile_sam import setup_model
 from samexporter.onnx_utils import ImageEncoderOnnxModel
 from onnx.external_data_helper import convert_model_to_external_data
 
@@ -34,7 +35,7 @@ parser.add_argument(
     "--model-type",
     type=str,
     required=True,
-    help="In ['default', 'vit_h', 'vit_l', 'vit_b']. "
+    help="In ['default', 'vit_h', 'vit_l', 'vit_b', 'mobile']. "
     "Which type of SAM model to export.",
 )
 
@@ -81,7 +82,12 @@ def run_export(
     gelu_approximate: bool = False,
 ):
     print("Loading model...")
-    sam = sam_model_registry[model_type](checkpoint=checkpoint)
+    if model_type == "mobile":
+        checkpoint = torch.load(checkpoint, map_location="cpu")
+        sam = setup_model()
+        sam.load_state_dict(checkpoint, strict=True)
+    else:
+        sam = sam_model_registry[model_type](checkpoint=checkpoint)
 
     onnx_model = ImageEncoderOnnxModel(
         model=sam,

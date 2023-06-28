@@ -10,7 +10,7 @@ def get_long_description():
 
 setup(
     name="samexporter",
-    version="0.1.1",
+    version="0.2.0",
     description="Exporting Segment Anything models different formats",
     author="Viet Anh Nguyen",
     author_email="vietanh.dev@gmail.com",
@@ -27,6 +27,7 @@ setup(
             "opencv-python",
             "onnx",
             "onnxruntime",
+            "timm",
         ],
         "dev": ["flake8", "isort", "black", "pre-commit"],
     },

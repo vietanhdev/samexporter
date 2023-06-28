@@ -4,6 +4,8 @@
 # This source code is licensed under the license found in the
 # LICENSE file in the root directory of this source tree.
 
+import pathlib
+
 import torch
 
 from segment_anything import sam_model_registry
@@ -154,6 +156,7 @@ def run_export(
 
     output_names = ["masks", "iou_predictions", "low_res_masks"]
 
+    pathlib.Path(output).parent.mkdir(parents=True, exist_ok=True)
     with warnings.catch_warnings():
         warnings.filterwarnings("ignore", category=torch.jit.TracerWarning)
         warnings.filterwarnings("ignore", category=UserWarning)

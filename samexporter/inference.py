@@ -19,7 +19,7 @@ argparser = argparse.ArgumentParser()
 argparser.add_argument(
     "--encoder_model",
     type=str,
-    default="output_models/sam_vit_h_4b8939.encoder/model.onnx",
+    default="output_models/sam_vit_h_4b8939.encoder.onnx",
     help="Path to the ONNX encoder model",
 )
 argparser.add_argument(
