@@ -10,7 +10,7 @@ def get_long_description():
 
 setup(
     name="samexporter",
-    version="0.2.0",
+    version="0.3.0",
     description="Exporting Segment Anything models different formats",
     author="Viet Anh Nguyen",
     author_email="vietanh.dev@gmail.com",
