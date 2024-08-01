@@ -19,3 +19,41 @@ exclude = '''
 requires = ["setuptools", "wheel"]
 build-backend = "setuptools.build_meta"
 
+[project]
+name = "samexporter"
+version = "0.4.0"
+description = "Exporting Segment Anything models ONNX format"
+authors = [
+    {name = "Viet Anh Nguyen", email = "vietanh.dev@gmail.com"},
+]
+readme = "README.md"
+requires-python = ">=3.7"
+license = {file = "LICENSE"}
+classifiers = [
+    "Programming Language :: Python :: 3",
+    "License :: OSI Approved :: MIT License",
+    "Operating System :: OS Independent",
+]
+
+dependencies = [
+    "onnx==1.16.2",
+    "onnxruntime==1.16.3",
+    "opencv-python==4.7.0.72",
+    "segment-anything==1.0",
+    "torch==2.4.0",
+    "torchvision",
+    "timm==0.9.2",
+]
+
+[project.urls]
+"Homepage" = "https://github.com/vietanhdev/samexporter"
+"Bug Tracker" = "https://github.com/vietanhdev/samexporter/issues"
+
+[project.optional-dependencies]
+dev = ["flake8", "isort", "black", "pre-commit"]
+
+[tool.setuptools]
+packages = ["samexporter"]
+
+[tool.setuptools.package-data]
+"samexporter.sam2_configs" = ["*.py", "*.yaml"]
