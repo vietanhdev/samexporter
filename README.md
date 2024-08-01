@@ -139,7 +139,7 @@ The models will be downloaded to the `original_models` folder:
 original_models
     + sam2_hiera_tiny.pt
     + sam2_hiera_small.pt
-    + sam2_hiera_base.pt
+    + sam2_hiera_base_plus.pt
     + sam2_hiera_large.pt
    ...
 ```
