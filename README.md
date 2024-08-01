@@ -1,35 +1,43 @@
-# SAM Exporter
+# SAM Exporter - Now with Segment Anything 2!~~
 
-Exporting [Segment Anything](https://github.com/facebookresearch/segment-anything) models to different formats.
+Exporting [Segment Anything](https://github.com/facebookresearch/segment-anything), [MobileSAM](https://github.com/ChaoningZhang/MobileSAM), and [Segment Anything 2](https://github.com/facebookresearch/segment-anything-2) into ONNX format for easy deployment.
 
-The [Segment Anything repository](https://github.com/facebookresearch/segment-anything) does not have a way to export **encoder** to ONNX format. There are some pull requests for this feature, but they have not accepted by SAM authors. Therefore, I want to create an easy tool to export Segment Anything models to different output formats as an easy option.
+[![PyPI version](https://badge.fury.io/py/samexporter.svg)](https://badge.fury.io/py/samexporter)
+[![Downloads](https://pepy.tech/badge/samexporter)](https://pepy.tech/project/samexporter)
+[![Downloads](https://pepy.tech/badge/samexporter/month)](https://pepy.tech/project/samexporter)
+[![Downloads](https://pepy.tech/badge/samexporter/week)](https://pepy.tech/project/samexporter)
 
 **Supported models:**
 
-- SAM ViT-B
-- SAM ViT-L
-- SAM ViT-H
-- MobileSAM*
+- Segment Anything 2 (Tiny, Small, Base, Large)
+- Segment Anything (SAM ViT-B, SAM ViT-L, SAM ViT-H)
+- MobileSAM
 
 ## Installation
+
+Requirements:
+
+- Python 3.10+
 
 From PyPi:
 
 ```bash
+pip install torch==2.4.0 torchvision --index-url https://download.pytorch.org/whl/cpu
 pip install samexporter
 ```
 
 From source:
 
 ```bash
+pip install torch==2.4.0 torchvision --index-url https://download.pytorch.org/whl/cpu
 git clone https://github.com/vietanhdev/samexporter
 cd samexporter
 pip install -e .
 ```
 
-## Usage
+## Convert Segment Anything, MobileSAM to ONNX
 
-- Download all models from [Segment Anything](https://github.com/facebookresearch/segment-anything) repository (*.pth).
+- Download Segment Anything from [https://github.com/facebookresearch/segment-anything](https://github.com/facebookresearch/segment-anything).
 - Download MobileSAM from [https://github.com/ChaoningZhang/MobileSAM](https://github.com/ChaoningZhang/MobileSAM).
 
 ```text
@@ -115,6 +123,33 @@ bash convert_all_meta_sam.sh
 ```bash
 bash convert_mobile_sam.sh
 ```
+
+## Convert Segment Anything 2 to ONNX
+
+- Download Segment Anything 2 from [https://github.com/facebookresearch/segment-anything-2.git](https://github.com/facebookresearch/segment-anything-2.git). You can do it by:
+
+```bash
+cd original_models
+bash download_sam2.sh
+```
+
+The models will be downloaded to the `original_models` folder:
+
+```text
+original_models
+    + sam2_hiera_tiny.pt
+    + sam2_hiera_small.pt
+    + sam2_hiera_base.pt
+    + sam2_hiera_large.pt
+   ...
+```
+
+- Install dependencies:
+
+```bash
+pip install git+https://github.com/facebookresearch/segment-anything-2.git
+```
+
 
 ## Tips
 
