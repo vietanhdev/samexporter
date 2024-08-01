@@ -1,9 +1,10 @@
 from typing import Any
+import argparse
+import pathlib
+
 import torch
 from torch import nn
-import torch
 from sam2.build_sam import build_sam2
-
 from sam2.modeling.sam2_base import SAM2Base
 
 
@@ -145,74 +146,99 @@ class SAM2ImageDecoder(nn.Module):
         return mask_embedding
 
 
-model_type = "sam2_hiera_tiny"
-input_size = 1024
-multimask_output = True
-if model_type == "sam2_hiera_tiny":
-    model_cfg = "sam2_hiera_t.yaml"
-elif model_type == "sam2_hiera_small":
-    model_cfg = "sam2_hiera_s.yaml"
-elif model_type == "sam2_hiera_base_plus":
-    model_cfg = "sam2_hiera_b+.yaml"
-else:
-    model_cfg = "sam2_hiera_l.yaml"
+if __name__ == "__main__":
+    parser = argparse.ArgumentParser(
+        description="Export the SAM2 prompt encoder and mask decoder to an ONNX model."
+    )
+    parser.add_argument(
+        "--checkpoint",
+        type=str,
+        required=True,
+        help="The path to the SAM model checkpoint.",
+    )
+
+    parser.add_argument(
+        "--output_encoder",
+        type=str,
+        required=True,
+        help="The filename to save the encoder ONNX model to.",
+    )
+
+    parser.add_argument(
+        "--output_decoder",
+        type=str,
+        required=True,
+        help="The filename to save the decoder ONNX model to.",
+    )
+
+    parser.add_argument(
+        "--model_type",
+        type=str,
+        required=True,
+        help="In the form of sam2_hiera_{tiny, small, base_plus, large}.",
+    )
+
+    parser.add_argument(
+        "--opset",
+        type=int,
+        default=17,
+        help="The ONNX opset version to use. Must be >=11",
+    )
+
+    args = parser.parse_args()
+
+    input_size = 1024
+    multimask_output = True
+    model_type = args.model_type
+    if model_type == "sam2_hiera_tiny":
+        model_cfg = "sam2_hiera_t.yaml"
+    elif model_type == "sam2_hiera_small":
+        model_cfg = "sam2_hiera_s.yaml"
+    elif model_type == "sam2_hiera_base_plus":
+        model_cfg = "sam2_hiera_b+.yaml"
+    else:
+        model_cfg = "sam2_hiera_l.yaml"
+
+    sam2_model = build_sam2(model_cfg, args.checkpoint, device="cpu")
+    img = torch.randn(1, 3, input_size, input_size).cpu()
+    sam2_encoder = SAM2ImageEncoder(sam2_model).cpu()
+    high_res_feats_0, high_res_feats_1, image_embed = sam2_encoder(img)
 
 
-sam2_checkpoint = f"original_models/{model_type}.pt"
-sam2_model = build_sam2(model_cfg, sam2_checkpoint, device="cpu")
-img = torch.randn(1, 3, input_size, input_size).cpu()
-
-sam2_encoder = SAM2ImageEncoder(sam2_model).cpu()
-high_res_feats_0, high_res_feats_1, image_embed = sam2_encoder(img)
-print(high_res_feats_0.shape)
-print(high_res_feats_1.shape)
-print(image_embed.shape)
-
-torch.onnx.export(
-    sam2_encoder,
-    img,
-    f"{model_type}_encoder.onnx",
-    export_params=True,
-    opset_version=17,
-    do_constant_folding=True,
-    input_names=["image"],
-    output_names=["high_res_feats_0", "high_res_feats_1", "image_embed"],
-)
+    pathlib.Path(args.output_encoder).parent.mkdir(parents=True, exist_ok=True)
+    torch.onnx.export(
+        sam2_encoder,
+        img,
+        args.output_encoder,
+        export_params=True,
+        opset_version=args.opset,
+        do_constant_folding=True,
+        input_names=["image"],
+        output_names=["high_res_feats_0", "high_res_feats_1", "image_embed"],
+    )
 
 
-sam2_decoder = SAM2ImageDecoder(
-    sam2_model, multimask_output=multimask_output
-).cpu()
+    sam2_decoder = SAM2ImageDecoder(
+        sam2_model, multimask_output=multimask_output
+    ).cpu()
 
-embed_dim = sam2_model.sam_prompt_encoder.embed_dim
-embed_size = (
-    sam2_model.image_size // sam2_model.backbone_stride,
-    sam2_model.image_size // sam2_model.backbone_stride,
-)
-mask_input_size = [4 * x for x in embed_size]
-print(embed_dim, embed_size, mask_input_size)
+    embed_dim = sam2_model.sam_prompt_encoder.embed_dim
+    embed_size = (
+        sam2_model.image_size // sam2_model.backbone_stride,
+        sam2_model.image_size // sam2_model.backbone_stride,
+    )
+    mask_input_size = [4 * x for x in embed_size]
+    print(embed_dim, embed_size, mask_input_size)
 
-point_coords = torch.randint(
-    low=0, high=input_size, size=(1, 5, 2), dtype=torch.float
-)
-point_labels = torch.randint(low=0, high=1, size=(1, 5), dtype=torch.float)
-mask_input = torch.randn(1, 1, *mask_input_size, dtype=torch.float)
-has_mask_input = torch.tensor([1], dtype=torch.float)
-orig_im_size = torch.tensor([input_size, input_size], dtype=torch.float)
+    point_coords = torch.randint(
+        low=0, high=input_size, size=(1, 5, 2), dtype=torch.float
+    )
+    point_labels = torch.randint(low=0, high=1, size=(1, 5), dtype=torch.float)
+    mask_input = torch.randn(1, 1, *mask_input_size, dtype=torch.float)
+    has_mask_input = torch.tensor([1], dtype=torch.float)
+    orig_im_size = torch.tensor([input_size, input_size], dtype=torch.float)
 
-masks, scores = sam2_decoder(
-    image_embed,
-    high_res_feats_0,
-    high_res_feats_1,
-    point_coords,
-    point_labels,
-    mask_input,
-    has_mask_input,
-)
-
-torch.onnx.export(
-    sam2_decoder,
-    (
+    masks, scores = sam2_decoder(
         image_embed,
         high_res_feats_0,
         high_res_feats_1,
@@ -220,25 +246,38 @@ torch.onnx.export(
         point_labels,
         mask_input,
         has_mask_input,
-    ),
-    f"{model_type}_decoder.onnx",
-    export_params=True,
-    opset_version=16,
-    do_constant_folding=True,
-    input_names=[
-        "image_embed",
-        "high_res_feats_0",
-        "high_res_feats_1",
-        "point_coords",
-        "point_labels",
-        "mask_input",
-        "has_mask_input",
-    ],
-    output_names=["masks", "iou_predictions"],
-    dynamic_axes={
-        "point_coords": {0: "num_labels", 1: "num_points"},
-        "point_labels": {0: "num_labels", 1: "num_points"},
-        "mask_input": {0: "num_labels"},
-        "has_mask_input": {0: "num_labels"},
-    },
-)
+    )
+
+    pathlib.Path(args.output_decoder).parent.mkdir(parents=True, exist_ok=True)
+    torch.onnx.export(
+        sam2_decoder,
+        (
+            image_embed,
+            high_res_feats_0,
+            high_res_feats_1,
+            point_coords,
+            point_labels,
+            mask_input,
+            has_mask_input,
+        ),
+        args.output_decoder,
+        export_params=True,
+        opset_version=args.opset,
+        do_constant_folding=True,
+        input_names=[
+            "image_embed",
+            "high_res_feats_0",
+            "high_res_feats_1",
+            "point_coords",
+            "point_labels",
+            "mask_input",
+            "has_mask_input",
+        ],
+        output_names=["masks", "iou_predictions"],
+        dynamic_axes={
+            "point_coords": {0: "num_labels", 1: "num_points"},
+            "point_labels": {0: "num_labels", 1: "num_points"},
+            "mask_input": {0: "num_labels"},
+            "has_mask_input": {0: "num_labels"},
+        },
+    )

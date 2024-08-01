@@ -212,7 +212,6 @@ if __name__ == "__main__":
         quantize_dynamic(
             model_input=args.output,
             model_output=args.quantize_out,
-            optimize_model=True,
             per_channel=False,
             reduce_range=False,
             weight_type=QuantType.QUInt8,

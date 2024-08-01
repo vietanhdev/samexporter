@@ -112,7 +112,7 @@ python -m samexporter.inference \
 
 **Short options:**
 
-- Convert all Meta's models to ONNX format:
+- Convert all Segment Anything models to ONNX format:
 
 ```bash
 bash convert_all_meta_sam.sh
@@ -150,6 +150,11 @@ original_models
 pip install git+https://github.com/facebookresearch/segment-anything-2.git
 ```
 
+- Convert all Segment Anything models to ONNX format:
+
+```bash
+bash convert_all_meta_sam2.sh
+```
 
 ## Tips
 
