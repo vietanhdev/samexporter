@@ -11,9 +11,6 @@ class SegmentAnything2ONNX:
     """Segmentation model using Segment Anything 2 (SAM2)"""
 
     def __init__(self, encoder_model_path, decoder_model_path) -> None:
-        self.target_size = 1024
-        self.input_size = (684, 1024)
-
         self.encoder = SAM2ImageEncoder(encoder_model_path)
         self.decoder = SAM2ImageDecoder(
             decoder_model_path, self.encoder.input_shape[2:]
@@ -21,35 +18,12 @@ class SegmentAnything2ONNX:
 
     def encode(self, cv_image: np.ndarray) -> list[np.ndarray]:
         original_size = cv_image.shape[:2]
-
-        # Calculate a transformation matrix to convert to self.input_size
-        scale_x = self.input_size[1] / cv_image.shape[1]
-        scale_y = self.input_size[0] / cv_image.shape[0]
-        scale = min(scale_x, scale_y)
-        transform_matrix = np.array(
-            [
-                [scale, 0, 0],
-                [0, scale, 0],
-                [0, 0, 1],
-            ]
-        )
-        cv_image = cv2.warpAffine(
-            cv_image,
-            transform_matrix[:2],
-            (self.input_size[1], self.input_size[0]),
-            flags=cv2.INTER_LINEAR,
-        )
-
-        cv2.imshow("cv_image", cv_image)
-        cv2.waitKey(0)
-
         high_res_feats_0, high_res_feats_1, image_embed = self.encoder(cv_image)
         return {
             "high_res_feats_0": high_res_feats_0,
             "high_res_feats_1": high_res_feats_1,
             "image_embedding": image_embed,
             "original_size": original_size,
-            "transform_matrix": transform_matrix,
         }
 
     def predict_masks(self, embedding, prompt) -> list[np.ndarray]:
@@ -69,7 +43,6 @@ class SegmentAnything2ONNX:
                 )
                 point_labels.append(np.array([label, label]))
 
-        transform_matrix = embedding["transform_matrix"]
         image_embedding = embedding["image_embedding"]
         high_res_feats_0 = embedding["high_res_feats_0"]
         high_res_feats_1 = embedding["high_res_feats_1"]
@@ -81,17 +54,9 @@ class SegmentAnything2ONNX:
             high_res_feats_1,
             point_coords,
             point_labels,
-            select_best=True,
         )
 
-
-        # Transform the masks back to the original image size.
-        inv_transform_matrix = np.linalg.inv(transform_matrix)
-        transformed_masks = self.transform_masks(
-            masks, original_size, inv_transform_matrix
-        )
-
-        return transformed_masks
+        return masks
 
     def transform_masks(self, masks, original_size, transform_matrix):
         """Transform the masks back to the original image size.
@@ -215,7 +180,6 @@ class SAM2ImageDecoder:
         high_res_feats_1: np.ndarray,
         point_coords: list[np.ndarray] | np.ndarray,
         point_labels: list[np.ndarray] | np.ndarray,
-        select_best: bool = True,
     ) -> tuple[list[np.ndarray], ndarray]:
 
         return self.predict(
@@ -224,7 +188,6 @@ class SAM2ImageDecoder:
             high_res_feats_1,
             point_coords,
             point_labels,
-            select_best,
         )
 
     def predict(
@@ -234,7 +197,6 @@ class SAM2ImageDecoder:
         high_res_feats_1: np.ndarray,
         point_coords: list[np.ndarray] | np.ndarray,
         point_labels: list[np.ndarray] | np.ndarray,
-        select_best: bool = True,
     ) -> tuple[list[np.ndarray], ndarray]:
 
         inputs = self.prepare_inputs(
@@ -247,7 +209,7 @@ class SAM2ImageDecoder:
 
         outputs = self.infer(inputs)
 
-        return self.process_output(outputs, select_best)
+        return self.process_output(outputs)
 
     def prepare_inputs(
         self,
@@ -360,13 +322,22 @@ class SAM2ImageDecoder:
         return outputs
 
     def process_output(
-        self, outputs: list[np.ndarray], select_best: bool
+        self, outputs: list[np.ndarray]
     ) -> tuple[list[ndarray | Any], ndarray[Any, Any]]:
 
         scores = outputs[1].squeeze()
-        masks = outputs[0]
+        masks = outputs[0][0]
 
-        return masks, scores
+        processed_masks = []
+        for mask in masks:
+            mask = cv2.resize(
+                mask, (self.orig_im_size[1], self.orig_im_size[0])
+            )
+            processed_masks.append(mask)
+
+        return np.array(processed_masks).reshape(
+            (1, len(processed_masks), *self.orig_im_size)
+        ), scores
 
     def set_image_size(self, orig_im_size: tuple[int, int]) -> None:
         self.orig_im_size = orig_im_size

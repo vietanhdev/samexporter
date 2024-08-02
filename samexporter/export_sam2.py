@@ -187,7 +187,7 @@ if __name__ == "__main__":
 
     args = parser.parse_args()
 
-    input_size = 1024
+    input_size = (1024, 1024)
     multimask_output = True
     model_type = args.model_type
     if model_type == "sam2_hiera_tiny":
@@ -200,7 +200,7 @@ if __name__ == "__main__":
         model_cfg = "sam2_hiera_l.yaml"
 
     sam2_model = build_sam2(model_cfg, args.checkpoint, device="cpu")
-    img = torch.randn(1, 3, input_size, input_size).cpu()
+    img = torch.randn(1, 3, input_size[0], input_size[1]).cpu()
     sam2_encoder = SAM2ImageEncoder(sam2_model).cpu()
     high_res_feats_0, high_res_feats_1, image_embed = sam2_encoder(img)
 
@@ -231,12 +231,12 @@ if __name__ == "__main__":
     print(embed_dim, embed_size, mask_input_size)
 
     point_coords = torch.randint(
-        low=0, high=input_size, size=(1, 5, 2), dtype=torch.float
+        low=0, high=input_size[1], size=(1, 5, 2), dtype=torch.float
     )
     point_labels = torch.randint(low=0, high=1, size=(1, 5), dtype=torch.float)
     mask_input = torch.randn(1, 1, *mask_input_size, dtype=torch.float)
     has_mask_input = torch.tensor([1], dtype=torch.float)
-    orig_im_size = torch.tensor([input_size, input_size], dtype=torch.float)
+    orig_im_size = torch.tensor([input_size[0], input_size[1]], dtype=torch.float)
 
     masks, scores = sam2_decoder(
         image_embed,
