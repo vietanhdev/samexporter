@@ -10,7 +10,7 @@ import onnxruntime
 
 
 class SegmentAnythingONNX:
-    """Segmentation model using SegmentAnything"""
+    """Segmentation model using Segment Anything (SAM)"""
 
     def __init__(self, encoder_model_path, decoder_model_path) -> None:
         self.target_size = 1024
@@ -137,8 +137,7 @@ class SegmentAnythingONNX:
         return transformed_masks
 
     def transform_masks(self, masks, original_size, transform_matrix):
-        """Transform masks
-        Transform the masks back to the original image size.
+        """Transform the masks back to the original image size.
         """
         output_masks = []
         for batch in range(masks.shape[0]):

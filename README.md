@@ -9,7 +9,7 @@ Exporting [Segment Anything](https://github.com/facebookresearch/segment-anythin
 
 **Supported models:**
 
-- Segment Anything 2 (Tiny, Small, Base, Large)
+- Segment Anything 2 (Tiny, Small, Base, Large) - **Experimental - Work in progress**
 - Segment Anything (SAM ViT-B, SAM ViT-L, SAM ViT-H)
 - MobileSAM
 

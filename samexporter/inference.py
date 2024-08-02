@@ -9,6 +9,7 @@ import cv2
 import numpy as np
 
 from samexporter.sam_onnx import SegmentAnythingONNX
+from samexporter.sam2_onnx import SegmentAnything2ONNX
 
 
 def str2bool(v):
@@ -51,18 +52,32 @@ argparser.add_argument(
     action="store_true",
     help="Show the result",
 )
+argparser.add_argument(
+    "--sam_variant",
+    type=str,
+    default="sam",
+    help="Variant of SAM model. Options: sam, sam2",
+)
 args = argparser.parse_args()
 
-model = SegmentAnythingONNX(
-    args.encoder_model,
-    args.decoder_model,
-)
+model = None
+if args.sam_variant == "sam":
+    model = SegmentAnythingONNX(
+        args.encoder_model,
+        args.decoder_model,
+    )
+elif args.sam_variant == "sam2":
+    model = SegmentAnything2ONNX(
+        args.encoder_model,
+        args.decoder_model,
+    )
 
 image = cv2.imread(args.image)
 prompt = json.load(open(args.prompt))
 
 embedding = model.encode(image)
 masks = model.predict_masks(embedding, prompt)
+
 
 # Save the masks as a single image.
 mask = np.zeros((masks.shape[2], masks.shape[3], 3), dtype=np.uint8)
