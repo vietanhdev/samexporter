@@ -21,7 +21,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "samexporter"
-version = "0.4.0"
+version = "0.4.1"
 description = "Exporting Segment Anything models ONNX format"
 authors = [
     {name = "Viet Anh Nguyen", email = "vietanh.dev@gmail.com"},

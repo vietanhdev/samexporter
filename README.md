@@ -169,7 +169,7 @@ python -m samexporter.inference \
     --show
 ```
 
-![truck_sam2](sample_outputs/sam2_truck.png)
+![truck_sam2](https://raw.githubusercontent.com/vietanhdev/samexporter/main/sample_outputs/sam2_truck.png)
 
 ## Tips
 
