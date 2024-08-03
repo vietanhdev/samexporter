@@ -43,6 +43,7 @@ dependencies = [
     "torch==2.4.0",
     "torchvision",
     "timm==0.9.2",
+    "onnxsim==0.4.36",
 ]
 
 [project.urls]

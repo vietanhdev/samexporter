@@ -137,8 +137,7 @@ class SegmentAnythingONNX:
         return transformed_masks
 
     def transform_masks(self, masks, original_size, transform_matrix):
-        """Transform the masks back to the original image size.
-        """
+        """Transform the masks back to the original image size."""
         output_masks = []
         for batch in range(masks.shape[0]):
             batch_masks = []

@@ -76,6 +76,7 @@ image = cv2.imread(args.image)
 prompt = json.load(open(args.prompt))
 
 embedding = model.encode(image)
+
 masks = model.predict_masks(embedding, prompt)
 
 

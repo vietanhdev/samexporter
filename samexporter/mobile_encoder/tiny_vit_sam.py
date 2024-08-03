@@ -162,9 +162,7 @@ class PatchMerging(nn.Module):
         stride_c = 2
         if out_dim == 320 or out_dim == 448 or out_dim == 576:
             stride_c = 1
-        self.conv2 = Conv2d_BN(
-            out_dim, out_dim, 3, stride_c, 1, groups=out_dim
-        )
+        self.conv2 = Conv2d_BN(out_dim, out_dim, 3, stride_c, 1, groups=out_dim)
         self.conv3 = Conv2d_BN(out_dim, out_dim, 1, 1, 0)
 
     def forward(self, x):
@@ -424,12 +422,8 @@ class TinyViTBlock(nn.Module):
             x = self.attn(x)
         else:
             x = x.view(B, H, W, C)
-            pad_b = (
-                self.window_size - H % self.window_size
-            ) % self.window_size
-            pad_r = (
-                self.window_size - W % self.window_size
-            ) % self.window_size
+            pad_b = (self.window_size - H % self.window_size) % self.window_size
+            pad_r = (self.window_size - W % self.window_size) % self.window_size
             padding = pad_b > 0 or pad_r > 0
 
             if padding:
@@ -524,9 +518,11 @@ class BasicLayer(nn.Module):
                     window_size=window_size,
                     mlp_ratio=mlp_ratio,
                     drop=drop,
-                    drop_path=drop_path[i]
-                    if isinstance(drop_path, list)
-                    else drop_path,
+                    drop_path=(
+                        drop_path[i]
+                        if isinstance(drop_path, list)
+                        else drop_path
+                    ),
                     local_conv_size=local_conv_size,
                     activation=activation,
                 )
@@ -633,9 +629,9 @@ class TinyViT(nn.Module):
                 drop_path=dpr[
                     sum(depths[:i_layer]) : sum(depths[: i_layer + 1])
                 ],
-                downsample=PatchMerging
-                if (i_layer < self.num_layers - 1)
-                else None,
+                downsample=(
+                    PatchMerging if (i_layer < self.num_layers - 1) else None
+                ),
                 use_checkpoint=use_checkpoint,
                 out_dim=embed_dims[min(i_layer + 1, len(embed_dims) - 1)],
                 activation=activation,

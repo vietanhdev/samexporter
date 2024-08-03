@@ -36,10 +36,12 @@ class SegmentAnything2ONNX:
                 point_labels.append(np.array([label]))
             elif mark["type"] == "rectangle":
                 point_coords.append(
-                    np.array([
-                        [mark["data"][0], mark["data"][1]],
-                        [mark["data"][2], mark["data"][3]],
-                    ])
+                    np.array(
+                        [
+                            [mark["data"][0], mark["data"][1]],
+                            [mark["data"][2], mark["data"][3]],
+                        ]
+                    )
                 )
                 point_labels.append(np.array([label, label]))
 
@@ -59,8 +61,7 @@ class SegmentAnything2ONNX:
         return masks
 
     def transform_masks(self, masks, original_size, transform_matrix):
-        """Transform the masks back to the original image size.
-        """
+        """Transform the masks back to the original image size."""
         output_masks = []
         for batch in range(masks.shape[0]):
             batch_masks = []
@@ -106,9 +107,7 @@ class SAM2ImageEncoder:
         self.img_height, self.img_width = image.shape[:2]
 
         input_img = cv2.cvtColor(image, cv2.COLOR_BGR2RGB)
-        input_img = cv2.resize(
-            input_img, (self.input_width, self.input_height)
-        )
+        input_img = cv2.resize(input_img, (self.input_width, self.input_height))
 
         mean = np.array([0.485, 0.456, 0.406])
         std = np.array([0.229, 0.224, 0.225])
@@ -292,9 +291,9 @@ class SAM2ImageDecoder:
             * self.encoder_input_size[0]
         )  # Normalize y
 
-        return input_point_coords.astype(
+        return input_point_coords.astype(np.float32), input_point_labels.astype(
             np.float32
-        ), input_point_labels.astype(np.float32)
+        )
 
     def infer(
         self,
@@ -329,15 +328,20 @@ class SAM2ImageDecoder:
         masks = outputs[0][0]
 
         processed_masks = []
-        for mask in masks:
+        for mask, score in zip(masks, scores):
+            if score < 0.5:
+                continue
             mask = cv2.resize(
                 mask, (self.orig_im_size[1], self.orig_im_size[0])
             )
             processed_masks.append(mask)
 
-        return np.array(processed_masks).reshape(
-            (1, len(processed_masks), *self.orig_im_size)
-        ), scores
+        return (
+            np.array(processed_masks).reshape(
+                (1, len(processed_masks), *self.orig_im_size)
+            ),
+            scores,
+        )
 
     def set_image_size(self, orig_im_size: tuple[int, int]) -> None:
         self.orig_im_size = orig_im_size

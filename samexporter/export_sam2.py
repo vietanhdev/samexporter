@@ -4,6 +4,8 @@ import pathlib
 
 import torch
 from torch import nn
+import onnx
+from onnxsim import simplify
 from sam2.build_sam import build_sam2
 from sam2.modeling.sam2_base import SAM2Base
 
@@ -204,7 +206,6 @@ if __name__ == "__main__":
     sam2_encoder = SAM2ImageEncoder(sam2_model).cpu()
     high_res_feats_0, high_res_feats_1, image_embed = sam2_encoder(img)
 
-
     pathlib.Path(args.output_encoder).parent.mkdir(parents=True, exist_ok=True)
     torch.onnx.export(
         sam2_encoder,
@@ -216,7 +217,13 @@ if __name__ == "__main__":
         input_names=["image"],
         output_names=["high_res_feats_0", "high_res_feats_1", "image_embed"],
     )
-
+    print("Saved encoder to", args.output_encoder)
+    print("Simplifying encoder...")
+    onnx_model = onnx.load(args.output_encoder)
+    model_simp, check = simplify(onnx_model)
+    assert check, "Simplified ONNX model could not be validated"
+    onnx.save(model_simp, args.output_encoder)
+    print("Saved simplified encoder to", args.output_encoder)
 
     sam2_decoder = SAM2ImageDecoder(
         sam2_model, multimask_output=multimask_output
@@ -236,7 +243,9 @@ if __name__ == "__main__":
     point_labels = torch.randint(low=0, high=1, size=(1, 5), dtype=torch.float)
     mask_input = torch.randn(1, 1, *mask_input_size, dtype=torch.float)
     has_mask_input = torch.tensor([1], dtype=torch.float)
-    orig_im_size = torch.tensor([input_size[0], input_size[1]], dtype=torch.float)
+    orig_im_size = torch.tensor(
+        [input_size[0], input_size[1]], dtype=torch.float
+    )
 
     masks, scores = sam2_decoder(
         image_embed,
@@ -281,3 +290,10 @@ if __name__ == "__main__":
             "has_mask_input": {0: "num_labels"},
         },
     )
+    print("Saved decoder to", args.output_decoder)
+    print("Simplifying decoder...")
+    onnx_model = onnx.load(args.output_decoder)
+    model_simp, check = simplify(onnx_model)
+    assert check, "Simplified ONNX model could not be validated"
+    onnx.save(model_simp, args.output_decoder)
+    print("Saved simplified decoder to", args.output_decoder)
