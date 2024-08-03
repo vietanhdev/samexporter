@@ -38,7 +38,7 @@ argparser.add_argument(
 argparser.add_argument(
     "--prompt",
     type=str,
-    default="images/truck.jpg",
+    default="images/truck.json",
     help="Path to the image",
 )
 argparser.add_argument(
@@ -79,11 +79,10 @@ embedding = model.encode(image)
 
 masks = model.predict_masks(embedding, prompt)
 
-
-# Save the masks as a single image.
+# Merge masks
 mask = np.zeros((masks.shape[2], masks.shape[3], 3), dtype=np.uint8)
 for m in masks[0, :, :, :]:
-    mask[m > 0.0] = [255, 0, 0]
+    mask[m > 0.5] = [255, 0, 0]
 
 # Binding image and mask
 visualized = cv2.addWeighted(image, 0.5, mask, 0.5, 0)

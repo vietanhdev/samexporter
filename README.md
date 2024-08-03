@@ -9,7 +9,7 @@ Exporting [Segment Anything](https://github.com/facebookresearch/segment-anythin
 
 **Supported models:**
 
-- Segment Anything 2 (Tiny, Small, Base, Large) - **Experimental - Work in progress**
+- Segment Anything 2 (Tiny, Small, Base, Large) - **Note:** Experimental. Only image input is supported for now.
 - Segment Anything (SAM ViT-B, SAM ViT-L, SAM ViT-H)
 - MobileSAM
 
@@ -156,6 +156,21 @@ pip install git+https://github.com/facebookresearch/segment-anything-2.git
 bash convert_all_meta_sam2.sh
 ```
 
+- Inference using the exported ONNX model (only image input is supported for now):
+
+```bash
+python -m samexporter.inference \
+    --encoder_model output_models/sam2_hiera_tiny.encoder.onnx \
+    --decoder_model output_models/sam2_hiera_tiny.decoder.onnx \
+    --image images/plants.png \
+    --prompt images/truck_prompt_2.json \
+    --output output_images/plants_prompt_2_sam2.png \
+    --sam_variant sam2 \
+    --show
+```
+
+![truck_sam2](sample_outputs/sam2_truck.png)
+
 ## Tips
 
 - Use "quantized" models for faster inference and smaller model size. However, the accuracy may be lower than the original models.
@@ -165,7 +180,7 @@ bash convert_all_meta_sam2.sh
 
 This package was originally developed for auto labeling feature in [AnyLabeling](https://github.com/vietanhdev/anylabeling) project. However, you can use it for other purposes.
 
-[![](https://user-images.githubusercontent.com/18329471/236625792-07f01838-3f69-48b0-a12e-30bad27bd921.gif)](https://youtu.be/5qVJiYNX5Kk)
+[![AnyLabeling](https://user-images.githubusercontent.com/18329471/236625792-07f01838-3f69-48b0-a12e-30bad27bd921.gif)](https://youtu.be/5qVJiYNX5Kk)
 
 ## License
 

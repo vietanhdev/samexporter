@@ -27,23 +27,20 @@ class SegmentAnything2ONNX:
         }
 
     def predict_masks(self, embedding, prompt) -> list[np.ndarray]:
-        point_coords = []
-        point_labels = []
+        points = []
+        labels = []
         for mark in prompt:
-            label = mark.get("label", 1)
             if mark["type"] == "point":
-                point_coords.append(np.array(mark["data"]))
-                point_labels.append(np.array([label]))
+                points.append(mark["data"])
+                labels.append(mark["label"])
             elif mark["type"] == "rectangle":
-                point_coords.append(
-                    np.array(
-                        [
-                            [mark["data"][0], mark["data"][1]],
-                            [mark["data"][2], mark["data"][3]],
-                        ]
-                    )
-                )
-                point_labels.append(np.array([label, label]))
+                points.append([mark["data"][0], mark["data"][1]])  # top left
+                points.append(
+                    [mark["data"][2], mark["data"][3]]
+                )  # bottom right
+                labels.append(2)
+                labels.append(3)
+        points, labels = np.array(points), np.array(labels)
 
         image_embedding = embedding["image_embedding"]
         high_res_feats_0 = embedding["high_res_feats_0"]
@@ -54,8 +51,8 @@ class SegmentAnything2ONNX:
             image_embedding,
             high_res_feats_0,
             high_res_feats_1,
-            point_coords,
-            point_labels,
+            points,
+            labels,
         )
 
         return masks
@@ -217,15 +214,7 @@ class SAM2ImageDecoder:
         high_res_feats_1: np.ndarray,
         point_coords: list[np.ndarray] | np.ndarray,
         point_labels: list[np.ndarray] | np.ndarray,
-    ) -> tuple[
-        np.ndarray,
-        np.ndarray,
-        np.ndarray,
-        np.ndarray,
-        np.ndarray,
-        np.ndarray,
-        np.ndarray,
-    ]:
+    ):
 
         input_point_coords, input_point_labels = self.prepare_points(
             point_coords, point_labels
@@ -295,18 +284,7 @@ class SAM2ImageDecoder:
             np.float32
         )
 
-    def infer(
-        self,
-        inputs: tuple[
-            np.ndarray,
-            np.ndarray,
-            np.ndarray,
-            np.ndarray,
-            np.ndarray,
-            np.ndarray,
-            np.ndarray,
-        ],
-    ) -> list[np.ndarray]:
+    def infer(self, inputs) -> list[np.ndarray]:
         start = time.perf_counter()
 
         outputs = self.session.run(
@@ -327,19 +305,13 @@ class SAM2ImageDecoder:
         scores = outputs[1].squeeze()
         masks = outputs[0][0]
 
-        processed_masks = []
-        for mask, score in zip(masks, scores):
-            if score < 0.5:
-                continue
-            mask = cv2.resize(
-                mask, (self.orig_im_size[1], self.orig_im_size[0])
-            )
-            processed_masks.append(mask)
-
+        # Select the best masks based on the scores
+        best_mask = masks[np.argmax(scores)]
+        best_mask = cv2.resize(
+            best_mask, (self.orig_im_size[1], self.orig_im_size[0])
+        )
         return (
-            np.array(processed_masks).reshape(
-                (1, len(processed_masks), *self.orig_im_size)
-            ),
+            np.array([[best_mask]]),
             scores,
         )
 
