@@ -1,10 +1,10 @@
 [build-system]
-requires = ["setuptools", "wheel"]
+requires = ["setuptools>=61.0", "wheel"]
 build-backend = "setuptools.build_meta"
 
 [project]
 name = "samexporter"
-version = "0.4.3"
+version = "0.4.4"
 description = "Exporting Segment Anything models ONNX format"
 authors = [
     {name = "Viet Anh Nguyen", email = "vietanh.dev@gmail.com"},
