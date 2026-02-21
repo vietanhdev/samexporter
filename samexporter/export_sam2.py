@@ -1,13 +1,13 @@
-from typing import Any
 import argparse
 import pathlib
+from typing import Any
 
-import torch
-from torch import nn
 import onnx
+import torch
 from onnxsim import simplify
 from sam2.build_sam import build_sam2
 from sam2.modeling.sam2_base import SAM2Base
+from torch import nn
 
 
 class SAM2ImageEncoder(nn.Module):
@@ -26,9 +26,7 @@ class SAM2ImageEncoder(nn.Module):
             backbone_out["backbone_fpn"][1]
         )
 
-        feature_maps = backbone_out["backbone_fpn"][
-            -self.model.num_feature_levels :
-        ]
+        feature_maps = backbone_out["backbone_fpn"][-self.model.num_feature_levels :]
         vision_pos_embeds = backbone_out["vision_pos_enc"][
             -self.model.num_feature_levels :
         ]
@@ -87,10 +85,8 @@ class SAM2ImageDecoder(nn.Module):
             masks = masks[:, 1:, :, :]
             iou_predictions = iou_predictions[:, 1:]
         else:
-            masks, iou_pred = (
-                self.mask_decoder._dynamic_multimask_via_stability(
-                    masks, iou_predictions
-                )
+            masks, iou_pred = self.mask_decoder._dynamic_multimask_via_stability(
+                masks, iou_predictions
             )
 
         masks = torch.clamp(masks, -32.0, 32.0)
@@ -115,24 +111,19 @@ class SAM2ImageDecoder(nn.Module):
         point_coords[:, :, 0] = point_coords[:, :, 0] / self.model.image_size
         point_coords[:, :, 1] = point_coords[:, :, 1] / self.model.image_size
 
-        point_embedding = self.prompt_encoder.pe_layer._pe_encoding(
-            point_coords
-        )
+        point_embedding = self.prompt_encoder.pe_layer._pe_encoding(point_coords)
         point_labels = point_labels.unsqueeze(-1).expand_as(point_embedding)
 
         point_embedding = point_embedding * (point_labels != -1)
         point_embedding = (
             point_embedding
-            + self.prompt_encoder.not_a_point_embed.weight
-            * (point_labels == -1)
+            + self.prompt_encoder.not_a_point_embed.weight * (point_labels == -1)
         )
 
         for i in range(self.prompt_encoder.num_point_embeddings):
-            point_embedding = (
-                point_embedding
-                + self.prompt_encoder.point_embeddings[i].weight
-                * (point_labels == i)
-            )
+            point_embedding = point_embedding + self.prompt_encoder.point_embeddings[
+                i
+            ].weight * (point_labels == i)
 
         return point_embedding
 
@@ -218,16 +209,19 @@ if __name__ == "__main__":
         model_cfg = "sam2_hiera_l.yaml"
 
     # Register the config directory with Hydra
-    from hydra.core.global_hydra import GlobalHydra
-    from hydra import initialize_config_dir, compose
     import os
+
+    from hydra import initialize_config_dir
+    from hydra.core.global_hydra import GlobalHydra
 
     # Clear any existing Hydra instance
     GlobalHydra.instance().clear()
 
     # Get absolute path to sam2_configs
-    config_dir = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "sam2_configs"))
-    
+    config_dir = os.path.abspath(
+        os.path.join(os.path.dirname(__file__), "..", "sam2_configs")
+    )
+
     with initialize_config_dir(config_dir=config_dir, version_base="1.2"):
         sam2_model = build_sam2(model_cfg, args.checkpoint, device="cpu")
     img = torch.randn(1, 3, input_size[0], input_size[1]).cpu()
@@ -254,9 +248,7 @@ if __name__ == "__main__":
         onnx.save(model_simp, args.output_encoder)
         print("Saved simplified encoder to", args.output_encoder)
 
-    sam2_decoder = SAM2ImageDecoder(
-        sam2_model, multimask_output=multimask_output
-    ).cpu()
+    sam2_decoder = SAM2ImageDecoder(sam2_model, multimask_output=multimask_output).cpu()
 
     embed_dim = sam2_model.sam_prompt_encoder.embed_dim
     embed_size = (
@@ -272,9 +264,7 @@ if __name__ == "__main__":
     point_labels = torch.randint(low=0, high=1, size=(1, 5), dtype=torch.float)
     mask_input = torch.randn(1, 1, *mask_input_size, dtype=torch.float)
     has_mask_input = torch.tensor([1], dtype=torch.float)
-    orig_im_size = torch.tensor(
-        [input_size[0], input_size[1]], dtype=torch.float
-    )
+    orig_im_size = torch.tensor([input_size[0], input_size[1]], dtype=torch.float)
 
     masks, scores = sam2_decoder(
         image_embed,

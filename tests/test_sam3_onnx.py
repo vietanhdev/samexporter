@@ -32,8 +32,8 @@ Actual model I/O (from sam3_decoder.onnx inspection):
     [2] masks   (N, 1, H, W)     bool
 """
 
-import sys
 import os
+import sys
 import unittest
 from unittest.mock import MagicMock, patch
 
@@ -43,16 +43,16 @@ import numpy as np
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "..")))
 
 from samexporter.sam3_onnx import (
-    SegmentAnything3ONNX,
-    SAM3ImageEncoder,
     SAM3ImageDecoder,
+    SAM3ImageEncoder,
     SAM3LanguageEncoder,
+    SegmentAnything3ONNX,
 )
-
 
 # ---------------------------------------------------------------------------
 # Helpers
 # ---------------------------------------------------------------------------
+
 
 def _make_mock_session(input_specs, run_return=None):
     """Return a MagicMock that mimics an onnxruntime.InferenceSession.
@@ -79,17 +79,17 @@ def _make_mock_session(input_specs, run_return=None):
 
 # Decoder input specs matching the actual simplified ONNX model.
 _DECODER_INPUT_SPECS = [
-    ("original_height",   [],             "tensor(int64)"),
-    ("original_width",    [],             "tensor(int64)"),
-    ("vision_pos_enc_2",  [1, 256, 72, 72], "tensor(float)"),
-    ("backbone_fpn_0",    [1, 256, 288, 288], "tensor(float)"),
-    ("backbone_fpn_1",    [1, 256, 144, 144], "tensor(float)"),
-    ("backbone_fpn_2",    [1, 256, 72, 72],   "tensor(float)"),
-    ("language_mask",     [1, 32],            "tensor(bool)"),
-    ("language_features", [32, 1, 256],       "tensor(float)"),
-    ("box_coords",        [1, 1, 4],          "tensor(float)"),
-    ("box_labels",        [1, 1],             "tensor(int64)"),
-    ("box_masks",         [1, 1],             "tensor(bool)"),
+    ("original_height", [], "tensor(int64)"),
+    ("original_width", [], "tensor(int64)"),
+    ("vision_pos_enc_2", [1, 256, 72, 72], "tensor(float)"),
+    ("backbone_fpn_0", [1, 256, 288, 288], "tensor(float)"),
+    ("backbone_fpn_1", [1, 256, 144, 144], "tensor(float)"),
+    ("backbone_fpn_2", [1, 256, 72, 72], "tensor(float)"),
+    ("language_mask", [1, 32], "tensor(bool)"),
+    ("language_features", [32, 1, 256], "tensor(float)"),
+    ("box_coords", [1, 1, 4], "tensor(float)"),
+    ("box_labels", [1, 1], "tensor(int64)"),
+    ("box_masks", [1, 1], "tensor(bool)"),
 ]
 
 _ENCODER_INPUT_SPECS = [
@@ -105,6 +105,7 @@ _LANG_INPUT_SPECS = [
 # SegmentAnything3ONNX integration tests (mocked sessions)
 # ---------------------------------------------------------------------------
 
+
 class TestSAM3OnnxRectanglePrompt(unittest.TestCase):
     """Verify that a rectangle prompt is correctly converted to box_coords."""
 
@@ -114,15 +115,15 @@ class TestSAM3OnnxRectanglePrompt(unittest.TestCase):
         enc_sess = _make_mock_session(
             _ENCODER_INPUT_SPECS,
             run_return=[np.zeros((1, 256, 288, 288))] * 3
-                      + [np.zeros((1, 256, 288, 288))] * 3,
+            + [np.zeros((1, 256, 288, 288))] * 3,
         )
         H, W = 100, 200
         dec_sess = _make_mock_session(
             _DECODER_INPUT_SPECS,
             # Decoder returns (boxes, scores, masks) – i.e. [0]=boxes, [1]=scores, [2]=masks.
             run_return=[
-                np.zeros((1, 4), dtype=np.float32),    # boxes
-                np.array([0.9], dtype=np.float32),      # scores
+                np.zeros((1, 4), dtype=np.float32),  # boxes
+                np.array([0.9], dtype=np.float32),  # scores
                 np.ones((1, 1, H, W), dtype=np.bool_),  # masks
             ],
         )
@@ -135,13 +136,13 @@ class TestSAM3OnnxRectanglePrompt(unittest.TestCase):
             "original_size": (H, W),
             "vision_pos_enc_0": np.zeros((1, 256, 288, 288), dtype=np.float32),
             "vision_pos_enc_1": np.zeros((1, 256, 144, 144), dtype=np.float32),
-            "vision_pos_enc_2": np.zeros((1, 256, 72, 72),  dtype=np.float32),
-            "backbone_fpn_0":   np.zeros((1, 256, 288, 288), dtype=np.float32),
-            "backbone_fpn_1":   np.zeros((1, 256, 144, 144), dtype=np.float32),
-            "backbone_fpn_2":   np.zeros((1, 256, 72, 72),  dtype=np.float32),
-            "language_mask":     np.zeros((1, 32), dtype=np.bool_),
+            "vision_pos_enc_2": np.zeros((1, 256, 72, 72), dtype=np.float32),
+            "backbone_fpn_0": np.zeros((1, 256, 288, 288), dtype=np.float32),
+            "backbone_fpn_1": np.zeros((1, 256, 144, 144), dtype=np.float32),
+            "backbone_fpn_2": np.zeros((1, 256, 72, 72), dtype=np.float32),
+            "language_mask": np.zeros((1, 32), dtype=np.bool_),
             "language_features": np.zeros((32, 1, 256), dtype=np.float32),
-            "language_embeds":   np.zeros((32, 1, 1024), dtype=np.float32),
+            "language_embeds": np.zeros((32, 1, 1024), dtype=np.float32),
         }
 
         # Rectangle: [x1=50, y1=20, x2=150, y2=80] in a 100×200 image.
@@ -182,14 +183,14 @@ class TestSAM3OnnxRectanglePrompt(unittest.TestCase):
         embedding = {
             "original_size": (H, W),
             "vision_pos_enc_0": np.zeros((1, 256, 18, 18), dtype=np.float32),
-            "vision_pos_enc_1": np.zeros((1, 256, 9, 9),   dtype=np.float32),
-            "vision_pos_enc_2": np.zeros((1, 256, 5, 5),   dtype=np.float32),
-            "backbone_fpn_0":   np.zeros((1, 256, 18, 18), dtype=np.float32),
-            "backbone_fpn_1":   np.zeros((1, 256, 9, 9),   dtype=np.float32),
-            "backbone_fpn_2":   np.zeros((1, 256, 5, 5),   dtype=np.float32),
-            "language_mask":     np.zeros((1, 32), dtype=np.bool_),
+            "vision_pos_enc_1": np.zeros((1, 256, 9, 9), dtype=np.float32),
+            "vision_pos_enc_2": np.zeros((1, 256, 5, 5), dtype=np.float32),
+            "backbone_fpn_0": np.zeros((1, 256, 18, 18), dtype=np.float32),
+            "backbone_fpn_1": np.zeros((1, 256, 9, 9), dtype=np.float32),
+            "backbone_fpn_2": np.zeros((1, 256, 5, 5), dtype=np.float32),
+            "language_mask": np.zeros((1, 32), dtype=np.bool_),
             "language_features": np.zeros((32, 1, 256), dtype=np.float32),
-            "language_embeds":   np.zeros((32, 1, 1024), dtype=np.float32),
+            "language_embeds": np.zeros((32, 1, 1024), dtype=np.float32),
         }
         model.predict_masks(embedding, [])
 
@@ -219,12 +220,19 @@ class TestSAM3OnnxPointPrompt(unittest.TestCase):
         model = SegmentAnything3ONNX("enc.onnx", "dec.onnx")
         embedding = {
             "original_size": (H, W),
-            **{k: np.zeros(1) for k in (
-                "vision_pos_enc_0", "vision_pos_enc_1", "vision_pos_enc_2",
-                "backbone_fpn_0", "backbone_fpn_1", "backbone_fpn_2",
-                "language_embeds",
-            )},
-            "language_mask":     np.zeros((1, 32), dtype=np.bool_),
+            **{
+                k: np.zeros(1)
+                for k in (
+                    "vision_pos_enc_0",
+                    "vision_pos_enc_1",
+                    "vision_pos_enc_2",
+                    "backbone_fpn_0",
+                    "backbone_fpn_1",
+                    "backbone_fpn_2",
+                    "language_embeds",
+                )
+            },
+            "language_mask": np.zeros((1, 32), dtype=np.bool_),
             "language_features": np.zeros((32, 1, 256), dtype=np.float32),
         }
         # Point at pixel (200, 100): cx=200/400=0.5, cy=100/200=0.5
@@ -244,8 +252,8 @@ class TestSAM3OnnxPointPrompt(unittest.TestCase):
 # SAM3ImageEncoder tests
 # ---------------------------------------------------------------------------
 
-class TestSAM3ImageEncoder(unittest.TestCase):
 
+class TestSAM3ImageEncoder(unittest.TestCase):
     @patch("onnxruntime.InferenceSession")
     def test_prepare_input_uint8_model(self, MockSession):
         """uint8 model → prepare_input returns (C, H, W) uint8."""
@@ -299,15 +307,15 @@ class TestSAM3ImageEncoder(unittest.TestCase):
 # SAM3ImageDecoder tests
 # ---------------------------------------------------------------------------
 
-class TestSAM3ImageDecoder(unittest.TestCase):
 
+class TestSAM3ImageDecoder(unittest.TestCase):
     @patch("onnxruntime.InferenceSession")
     def test_returns_masks_scores_boxes(self, MockSession):
         """Decoder __call__ returns (masks, scores, boxes) in that order."""
         H, W = 100, 100
-        boxes  = np.zeros((2, 4),     dtype=np.float32)
+        boxes = np.zeros((2, 4), dtype=np.float32)
         scores = np.array([0.9, 0.7], dtype=np.float32)
-        masks  = np.ones((2, 1, H, W), dtype=np.bool_)
+        masks = np.ones((2, 1, H, W), dtype=np.bool_)
 
         sess = _make_mock_session(
             _DECODER_INPUT_SPECS,
@@ -323,11 +331,15 @@ class TestSAM3ImageDecoder(unittest.TestCase):
 
         ret_masks, ret_scores, ret_boxes = dec(
             original_size,
-            dummy, dummy, dummy,  # vision_pos_enc 0,1,2
-            dummy, dummy, dummy,  # backbone_fpn 0,1,2
-            dummy_bool,           # language_mask
-            dummy_feat,           # language_features
-            None,                 # language_embeds (not needed by decoder)
+            dummy,
+            dummy,
+            dummy,  # vision_pos_enc 0,1,2
+            dummy,
+            dummy,
+            dummy,  # backbone_fpn 0,1,2
+            dummy_bool,  # language_mask
+            dummy_feat,  # language_features
+            None,  # language_embeds (not needed by decoder)
             np.zeros((1, 1, 4), dtype=np.float32),
             np.ones((1, 1), dtype=np.int64),
             np.zeros((1, 1), dtype=np.bool_),
@@ -354,7 +366,9 @@ class TestSAM3ImageDecoder(unittest.TestCase):
         dec = SAM3ImageDecoder("dec.onnx")
         dec(
             (10, 10),
-            None, None, np.zeros((1, 256, 2, 2), dtype=np.float32),
+            None,
+            None,
+            np.zeros((1, 256, 2, 2), dtype=np.float32),
             np.zeros((1, 256, 4, 4), dtype=np.float32),
             np.zeros((1, 256, 2, 2), dtype=np.float32),
             np.zeros((1, 256, 2, 2), dtype=np.float32),
@@ -395,7 +409,9 @@ class TestSAM3ImageDecoder(unittest.TestCase):
         dec = SAM3ImageDecoder("dec.onnx")
         ret_masks, _, _ = dec(
             (H, W),
-            None, None, np.zeros((1, 256, 2, 2), dtype=np.float32),
+            None,
+            None,
+            np.zeros((1, 256, 2, 2), dtype=np.float32),
             np.zeros((1, 256, 4, 4), dtype=np.float32),
             np.zeros((1, 256, 2, 2), dtype=np.float32),
             np.zeros((1, 256, 2, 2), dtype=np.float32),
@@ -414,8 +430,8 @@ class TestSAM3ImageDecoder(unittest.TestCase):
 # SegmentAnything3ONNX.encode – no language encoder
 # ---------------------------------------------------------------------------
 
-class TestSAM3OnnxEncodeNoLanguageEncoder(unittest.TestCase):
 
+class TestSAM3OnnxEncodeNoLanguageEncoder(unittest.TestCase):
     @patch("onnxruntime.InferenceSession")
     def test_encode_without_language_encoder_sets_none(self, MockSession):
         """encode() sets language keys to None when no language encoder is given."""

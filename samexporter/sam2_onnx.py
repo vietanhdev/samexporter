@@ -35,9 +35,7 @@ class SegmentAnything2ONNX:
                 labels.append(mark["label"])
             elif mark["type"] == "rectangle":
                 points.append([mark["data"][0], mark["data"][1]])  # top left
-                points.append(
-                    [mark["data"][2], mark["data"][3]]
-                )  # bottom right
+                points.append([mark["data"][2], mark["data"][3]])  # bottom right
                 labels.append(2)
                 labels.append(3)
         points, labels = np.array(points), np.array(labels)
@@ -86,9 +84,7 @@ class SAM2ImageEncoder:
         self.get_input_details()
         self.get_output_details()
 
-    def __call__(
-        self, image: np.ndarray
-    ) -> tuple[np.ndarray, np.ndarray, np.ndarray]:
+    def __call__(self, image: np.ndarray) -> tuple[np.ndarray, np.ndarray, np.ndarray]:
         return self.encode_image(image)
 
     def encode_image(
@@ -130,9 +126,7 @@ class SAM2ImageEncoder:
 
     def get_input_details(self) -> None:
         model_inputs = self.session.get_inputs()
-        self.input_names = [
-            model_inputs[i].name for i in range(len(model_inputs))
-        ]
+        self.input_names = [model_inputs[i].name for i in range(len(model_inputs))]
 
         self.input_shape = model_inputs[0].shape
         self.input_height = self.input_shape[2]
@@ -140,9 +134,7 @@ class SAM2ImageEncoder:
 
     def get_output_details(self) -> None:
         model_outputs = self.session.get_outputs()
-        self.output_names = [
-            model_outputs[i].name for i in range(len(model_outputs))
-        ]
+        self.output_names = [model_outputs[i].name for i in range(len(model_outputs))]
 
 
 class SAM2ImageDecoder:
@@ -259,13 +251,10 @@ class SAM2ImageDecoder:
                 (len(point_coords), max_num_points, 2), dtype=np.float32
             )
             input_point_labels = (
-                np.ones((len(point_coords), max_num_points), dtype=np.float32)
-                * -1
+                np.ones((len(point_coords), max_num_points), dtype=np.float32) * -1
             )
 
-            for i, (coords, labels) in enumerate(
-                zip(point_coords, point_labels)
-            ):
+            for i, (coords, labels) in enumerate(zip(point_coords, point_labels)):
                 input_point_coords[i, : coords.shape[0], :] = coords
                 input_point_labels[i, : labels.shape[0]] = labels
 
@@ -289,10 +278,7 @@ class SAM2ImageDecoder:
 
         outputs = self.session.run(
             self.output_names,
-            {
-                self.input_names[i]: inputs[i]
-                for i in range(len(self.input_names))
-            },
+            {self.input_names[i]: inputs[i] for i in range(len(self.input_names))},
         )
 
         print(f"infer time: {(time.perf_counter() - start) * 1000:.2f} ms")
@@ -307,9 +293,7 @@ class SAM2ImageDecoder:
 
         # Select the best masks based on the scores
         best_mask = masks[np.argmax(scores)]
-        best_mask = cv2.resize(
-            best_mask, (self.orig_im_size[1], self.orig_im_size[0])
-        )
+        best_mask = cv2.resize(best_mask, (self.orig_im_size[1], self.orig_im_size[0]))
         return (
             np.array([[best_mask]]),
             scores,
@@ -320,12 +304,8 @@ class SAM2ImageDecoder:
 
     def get_input_details(self) -> None:
         model_inputs = self.session.get_inputs()
-        self.input_names = [
-            model_inputs[i].name for i in range(len(model_inputs))
-        ]
+        self.input_names = [model_inputs[i].name for i in range(len(model_inputs))]
 
     def get_output_details(self) -> None:
         model_outputs = self.session.get_outputs()
-        self.output_names = [
-            model_outputs[i].name for i in range(len(model_outputs))
-        ]
+        self.output_names = [model_outputs[i].name for i in range(len(model_outputs))]

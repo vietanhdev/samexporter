@@ -1,22 +1,22 @@
 import argparse
+import os
 import pathlib
+import sys
+from unittest.mock import MagicMock
 
-import numpy as np
 import onnx
 import torch
 from onnxsim import simplify
 from torchvision.transforms import v2
 
-# Mock triton for Windows
-import sys
-from unittest.mock import MagicMock
+# Mock triton for Windows – must happen before any sam3 imports.
 mock_triton = MagicMock()
 sys.modules["triton"] = mock_triton
 sys.modules["triton.language"] = MagicMock()
 sys.modules["torch._inductor.runtime.triton_helpers"] = MagicMock()
 
 # Ensure sam3 is in PYTHONPATH
-import os
+
 # This file is at samexporter/samexporter/export_sam3.py
 samexporter_root = os.path.abspath(os.path.join(os.path.dirname(__file__), ".."))
 # Submodule is at samexporter/sam3.
@@ -26,17 +26,21 @@ sys.path.append(os.path.join(samexporter_root, "sam3"))
 sys.path.append(samexporter_root)
 
 try:
+    from osam._models.yoloworld.clip import tokenize
     from sam3.model.sam3_image import Sam3Image
     from sam3.model.sam3_image_processor import Sam3Processor
     from sam3.model_builder import build_sam3_image_model
-    from osam._models.yoloworld.clip import tokenize
 except ImportError as e:
     print(f"Error importing modules: {e}")
     print("Please make sure the sam3 submodule inside samexporter is available.")
     Sam3Image = object
     Sam3Processor = object
-    build_sam3_image_model = lambda: None
-    tokenize = lambda x: None
+
+    def build_sam3_image_model():
+        return None
+
+    def tokenize(x):
+        return None
 
 
 def get_replace_freqs_cis(module: torch.nn.Module) -> None:
@@ -74,7 +78,7 @@ class SAM3ImageEncoder(torch.nn.Module):
         # reference sam3-onnx export (export_onnx.py).
         self._transform = v2.Compose(
             [
-                v2.ToDtype(torch.float32, scale=True),   # uint8 → float [0,1]
+                v2.ToDtype(torch.float32, scale=True),  # uint8 → float [0,1]
                 v2.Normalize(mean=[0.5, 0.5, 0.5], std=[0.5, 0.5, 0.5]),  # → [-1,1]
             ]
         )
@@ -241,11 +245,20 @@ def export_sam3(output_dir: str, opset: int = 18, simplify_model: bool = False):
     torch.onnx.utils.export(
         decoder,
         args=(
-            orig_h, orig_w,
-            vpe0, vpe1, vpe2,
-            fpn0, fpn1, fpn2,
-            l_mask, l_feat, l_embed,
-            box_coords, box_labels, box_masks,
+            orig_h,
+            orig_w,
+            vpe0,
+            vpe1,
+            vpe2,
+            fpn0,
+            fpn1,
+            fpn2,
+            l_mask,
+            l_feat,
+            l_embed,
+            box_coords,
+            box_labels,
+            box_masks,
         ),
         f=str(decoder_path),
         export_params=True,
@@ -279,7 +292,7 @@ def export_sam3(output_dir: str, opset: int = 18, simplify_model: bool = False):
                 model_simp, check = simplify(onnx_model)
                 assert check, "Simplified ONNX model could not be validated"
                 onnx.save(model_simp, str(path))
-                print(f"  → simplified OK")
+                print("  → simplified OK")
             except Exception as e:
                 print(f"  → simplification failed ({e}), keeping original")
 
@@ -287,14 +300,12 @@ def export_sam3(output_dir: str, opset: int = 18, simplify_model: bool = False):
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="Export SAM3 to ONNX")
     parser.add_argument(
-        "--output_dir", type=str, default="output_models/sam3",
-        help="Output directory for ONNX models"
+        "--output_dir",
+        type=str,
+        default="output_models/sam3",
+        help="Output directory for ONNX models",
     )
-    parser.add_argument(
-        "--opset", type=int, default=18, help="ONNX opset version"
-    )
-    parser.add_argument(
-        "--simplify", action="store_true", help="Simplify ONNX models"
-    )
+    parser.add_argument("--opset", type=int, default=18, help="ONNX opset version")
+    parser.add_argument("--simplify", action="store_true", help="Simplify ONNX models")
     args = parser.parse_args()
     export_sam3(args.output_dir, args.opset, args.simplify)

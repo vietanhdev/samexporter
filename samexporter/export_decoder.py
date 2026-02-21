@@ -4,15 +4,13 @@
 # This source code is licensed under the license found in the
 # LICENSE file in the root directory of this source tree.
 
+import argparse
 import pathlib
+import warnings
 
 import torch
-
 from segment_anything import sam_model_registry
 from segment_anything.utils.onnx import SamOnnxModel
-
-import argparse
-import warnings
 
 try:
     import onnxruntime  # type: ignore
@@ -138,15 +136,11 @@ def run_export(
     embed_size = sam.prompt_encoder.image_embedding_size
     mask_input_size = [4 * x for x in embed_size]
     dummy_inputs = {
-        "image_embeddings": torch.randn(
-            1, embed_dim, *embed_size, dtype=torch.float
-        ),
+        "image_embeddings": torch.randn(1, embed_dim, *embed_size, dtype=torch.float),
         "point_coords": torch.randint(
             low=0, high=1024, size=(1, 5, 2), dtype=torch.float
         ),
-        "point_labels": torch.randint(
-            low=0, high=4, size=(1, 5), dtype=torch.float
-        ),
+        "point_labels": torch.randint(low=0, high=4, size=(1, 5), dtype=torch.float),
         "mask_input": torch.randn(1, 1, *mask_input_size, dtype=torch.float),
         "has_mask_input": torch.tensor([1], dtype=torch.float),
         "orig_im_size": torch.tensor([1500, 2250], dtype=torch.float),
@@ -160,7 +154,7 @@ def run_export(
     with warnings.catch_warnings():
         warnings.filterwarnings("ignore", category=torch.jit.TracerWarning)
         warnings.filterwarnings("ignore", category=UserWarning)
-        
+
         # Use torch.onnx.utils.export to force legacy exporter path
         print(f"Exporting onnx model to {output}...")
         torch.onnx.utils.export(
@@ -203,9 +197,7 @@ if __name__ == "__main__":
     )
 
     if args.quantize_out is not None:
-        assert (
-            onnxruntime_exists
-        ), "onnxruntime is required to quantize the model."
+        assert onnxruntime_exists, "onnxruntime is required to quantize the model."
         from onnxruntime.quantization import QuantType  # type: ignore
         from onnxruntime.quantization.quantize import quantize_dynamic  # type: ignore
 

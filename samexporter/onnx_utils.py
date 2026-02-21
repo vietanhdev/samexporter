@@ -1,10 +1,7 @@
 import torch
 import torch.nn as nn
-from torch.nn import functional as F
-
-from typing import List
-
 from segment_anything.modeling import Sam
+from torch.nn import functional as F
 
 
 class ImageEncoderOnnxModel(nn.Module):
@@ -22,8 +19,8 @@ class ImageEncoderOnnxModel(nn.Module):
         self,
         model: Sam,
         use_preprocess: bool,
-        pixel_mean: List[float] = None,
-        pixel_std: List[float] = None,
+        pixel_mean: list[float] = None,
+        pixel_std: list[float] = None,
     ):
         if pixel_mean is None:
             pixel_mean = self.DEFAULT_PIXEL_MEAN

@@ -1,16 +1,16 @@
 import argparse
-import sys
 import json
 import pathlib
+import sys
 
 sys.path.append(".")
 
 import cv2
 import numpy as np
 
-from samexporter.sam_onnx import SegmentAnythingONNX
 from samexporter.sam2_onnx import SegmentAnything2ONNX
 from samexporter.sam3_onnx import SegmentAnything3ONNX
+from samexporter.sam_onnx import SegmentAnythingONNX
 
 
 def str2bool(v):
@@ -98,7 +98,11 @@ if args.sam_variant == "sam3":
     if text_prompt is None:
         text_prompt = "visual"
 
-embedding = model.encode(image, text_prompt=text_prompt) if args.sam_variant == "sam3" else model.encode(image)
+embedding = (
+    model.encode(image, text_prompt=text_prompt)
+    if args.sam_variant == "sam3"
+    else model.encode(image)
+)
 
 masks = model.predict_masks(embedding, prompt)
 

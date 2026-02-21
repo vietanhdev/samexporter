@@ -1,17 +1,17 @@
-import torch
-import onnx
-
-from segment_anything import sam_model_registry
-from samexporter.mobile_encoder.setup_mobile_sam import setup_model
-from samexporter.onnx_utils import ImageEncoderOnnxModel
-from onnx.external_data_helper import convert_model_to_external_data
-
+import argparse
 import os
-from tempfile import mkdtemp
 import pathlib
 import shutil
-import argparse
 import warnings
+from tempfile import mkdtemp
+
+import onnx
+import torch
+from onnx.external_data_helper import convert_model_to_external_data
+from segment_anything import sam_model_registry
+
+from samexporter.mobile_encoder.setup_mobile_sam import setup_model
+from samexporter.onnx_utils import ImageEncoderOnnxModel
 
 parser = argparse.ArgumentParser(
     description="Export the SAM image encoder to an ONNX model."
@@ -104,9 +104,7 @@ def run_export(
     image_size = sam.image_encoder.img_size
     if use_preprocess:
         dummy_input = {
-            "input_image": torch.randn(
-                (image_size, image_size, 3), dtype=torch.float
-            )
+            "input_image": torch.randn((image_size, image_size, 3), dtype=torch.float)
         }
         dynamic_axes = {
             "input_image": {0: "image_height", 1: "image_width"},

@@ -15,13 +15,13 @@ run_single_test() {
     local prompt=$5
     local suffix=$6
     local extra_args=$7
-    
+
     local img_base=$(basename "$image" | cut -d. -f1)
     local enc_base=$(basename "$encoder" | cut -d. -f1)
     local output="${OUT_DIR}/${variant}_${enc_base}_${img_base}_${suffix}.png"
 
     echo "Testing: $variant | Model: $enc_base | Image: $img_base | Mode: $suffix"
-    
+
     python -m samexporter.inference \
         --sam_variant "$variant" \
         --encoder_model "$encoder" \
@@ -30,7 +30,7 @@ run_single_test() {
         --prompt "$prompt" \
         --output "$output" \
         $extra_args > /dev/null 2>&1
-    
+
     if [ -f "$output" ]; then
         echo "  [OK] -> $output"
     else

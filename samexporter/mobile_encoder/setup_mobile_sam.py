@@ -1,12 +1,11 @@
-import torch
-from samexporter.mobile_encoder.tiny_vit_sam import TinyViT
 from segment_anything.modeling import (
-    ImageEncoderViT,
     MaskDecoder,
     PromptEncoder,
     Sam,
     TwoWayTransformer,
 )
+
+from samexporter.mobile_encoder.tiny_vit_sam import TinyViT
 
 
 def setup_model():

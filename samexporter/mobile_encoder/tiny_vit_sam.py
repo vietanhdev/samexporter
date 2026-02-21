@@ -8,17 +8,19 @@
 # --------------------------------------------------------
 
 import itertools
+
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
 import torch.utils.checkpoint as checkpoint
 from timm.models.layers import (
     DropPath as TimmDropPath,
+)
+from timm.models.layers import (
     to_2tuple,
     trunc_normal_,
 )
 from timm.models.registry import register_model
-from typing import Tuple
 
 
 class Conv2d_BN(torch.nn.Sequential):
@@ -36,9 +38,7 @@ class Conv2d_BN(torch.nn.Sequential):
         super().__init__()
         self.add_module(
             "c",
-            torch.nn.Conv2d(
-                a, b, ks, stride, pad, dilation, groups, bias=False
-            ),
+            torch.nn.Conv2d(a, b, ks, stride, pad, dilation, groups, bias=False),
         )
         bn = torch.nn.BatchNorm2d(b)
         torch.nn.init.constant_(bn.weight, bn_weight_init)
@@ -50,10 +50,7 @@ class Conv2d_BN(torch.nn.Sequential):
         c, bn = self._modules.values()
         w = bn.weight / (bn.running_var + bn.eps) ** 0.5
         w = c.weight * w[:, None, None, None]
-        b = (
-            bn.bias
-            - bn.running_mean * bn.weight / (bn.running_var + bn.eps) ** 0.5
-        )
+        b = bn.bias - bn.running_mean * bn.weight / (bn.running_var + bn.eps) ** 0.5
         m = torch.nn.Conv2d(
             w.size(1) * self.c.groups,
             w.size(0),
@@ -82,11 +79,9 @@ class DropPath(TimmDropPath):
 class PatchEmbed(nn.Module):
     def __init__(self, in_chans, embed_dim, resolution, activation):
         super().__init__()
-        img_size: Tuple[int, int] = to_2tuple(resolution)
+        img_size: tuple[int, int] = to_2tuple(resolution)
         self.patches_resolution = (img_size[0] // 4, img_size[1] // 4)
-        self.num_patches = (
-            self.patches_resolution[0] * self.patches_resolution[1]
-        )
+        self.num_patches = self.patches_resolution[0] * self.patches_resolution[1]
         self.in_chans = in_chans
         self.embed_dim = embed_dim
         n = embed_dim
@@ -101,9 +96,7 @@ class PatchEmbed(nn.Module):
 
 
 class MBConv(nn.Module):
-    def __init__(
-        self, in_chans, out_chans, expand_ratio, activation, drop_path
-    ):
+    def __init__(self, in_chans, out_chans, expand_ratio, activation, drop_path):
         super().__init__()
         self.in_chans = in_chans
         self.hidden_chans = int(in_chans * expand_ratio)
@@ -122,14 +115,10 @@ class MBConv(nn.Module):
         )
         self.act2 = activation()
 
-        self.conv3 = Conv2d_BN(
-            self.hidden_chans, out_chans, ks=1, bn_weight_init=0.0
-        )
+        self.conv3 = Conv2d_BN(self.hidden_chans, out_chans, ks=1, bn_weight_init=0.0)
         self.act3 = activation()
 
-        self.drop_path = (
-            DropPath(drop_path) if drop_path > 0.0 else nn.Identity()
-        )
+        self.drop_path = DropPath(drop_path) if drop_path > 0.0 else nn.Identity()
 
     def forward(self, x):
         shortcut = x
@@ -291,9 +280,7 @@ class Attention(torch.nn.Module):
         self.qkv = nn.Linear(dim, h)
         self.proj = nn.Linear(self.dh, dim)
 
-        points = list(
-            itertools.product(range(resolution[0]), range(resolution[1]))
-        )
+        points = list(itertools.product(range(resolution[0]), range(resolution[1])))
         N = len(points)
         attention_offsets = {}
         idxs = []
@@ -383,9 +370,7 @@ class TinyViTBlock(nn.Module):
         self.window_size = window_size
         self.mlp_ratio = mlp_ratio
 
-        self.drop_path = (
-            DropPath(drop_path) if drop_path > 0.0 else nn.Identity()
-        )
+        self.drop_path = DropPath(drop_path) if drop_path > 0.0 else nn.Identity()
 
         assert dim % num_heads == 0, "dim must be divisible by num_heads"
         head_dim = dim // num_heads
@@ -519,9 +504,7 @@ class BasicLayer(nn.Module):
                     mlp_ratio=mlp_ratio,
                     drop=drop,
                     drop_path=(
-                        drop_path[i]
-                        if isinstance(drop_path, list)
-                        else drop_path
+                        drop_path[i] if isinstance(drop_path, list) else drop_path
                     ),
                     local_conv_size=local_conv_size,
                     activation=activation,
@@ -626,12 +609,8 @@ class TinyViT(nn.Module):
                 #   input_resolution=(patches_resolution[0] // (2 ** i_layer),
                 #                     patches_resolution[1] // (2 ** i_layer)),
                 depth=depths[i_layer],
-                drop_path=dpr[
-                    sum(depths[:i_layer]) : sum(depths[: i_layer + 1])
-                ],
-                downsample=(
-                    PatchMerging if (i_layer < self.num_layers - 1) else None
-                ),
+                drop_path=dpr[sum(depths[:i_layer]) : sum(depths[: i_layer + 1])],
+                downsample=(PatchMerging if (i_layer < self.num_layers - 1) else None),
                 use_checkpoint=use_checkpoint,
                 out_dim=embed_dims[min(i_layer + 1, len(embed_dims) - 1)],
                 activation=activation,
@@ -700,9 +679,7 @@ class TinyViT(nn.Module):
                 block.apply(lambda x: _set_lr_scale(x, lr_scales[i]))
                 i += 1
             if layer.downsample is not None:
-                layer.downsample.apply(
-                    lambda x: _set_lr_scale(x, lr_scales[i - 1])
-                )
+                layer.downsample.apply(lambda x: _set_lr_scale(x, lr_scales[i - 1]))
         assert i == depth
         for m in [self.norm_head, self.head]:
             m.apply(lambda x: _set_lr_scale(x, lr_scales[-1]))
@@ -752,7 +729,9 @@ class TinyViT(nn.Module):
         return x
 
 
-_checkpoint_url_format = "https://github.com/wkcn/TinyViT-model-zoo/releases/download/checkpoints/{}.pth"
+_checkpoint_url_format = (
+    "https://github.com/wkcn/TinyViT-model-zoo/releases/download/checkpoints/{}.pth"
+)
 _provided_checkpoints = {
     "tiny_vit_5m_224": "tiny_vit_5m_22kto1k_distill",
     "tiny_vit_11m_224": "tiny_vit_11m_22kto1k_distill",
@@ -771,12 +750,10 @@ def register_tiny_vit_model(fn):
         model = fn()
         if pretrained:
             model_name = fn.__name__
-            assert (
-                model_name in _provided_checkpoints
-            ), f"Sorry that the checkpoint `{model_name}` is not provided yet."
-            url = _checkpoint_url_format.format(
-                _provided_checkpoints[model_name]
+            assert model_name in _provided_checkpoints, (
+                f"Sorry that the checkpoint `{model_name}` is not provided yet."
             )
+            url = _checkpoint_url_format.format(_provided_checkpoints[model_name])
             checkpoint = torch.hub.load_state_dict_from_url(
                 url=url,
                 map_location="cpu",

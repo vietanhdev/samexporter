@@ -22,7 +22,7 @@ run_test() {
         --prompt "$prompt_file" \
         --output "$output" \
         $extra_args
-    
+
     if [ -f "$output" ]; then
         echo "  [OK] Saved to $output"
     else
