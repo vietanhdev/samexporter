@@ -68,7 +68,12 @@ class SegmentAnything3ONNX:
 
         return embedding
 
-    def predict_masks(self, embedding: dict[str, Any], prompt) -> np.ndarray:
+    def predict_masks(
+        self,
+        embedding: dict[str, Any],
+        prompt,
+        confidence_threshold: float = 0.5,
+    ) -> np.ndarray:
         """Run the decoder for the given geometric prompt.
 
         Parameters
@@ -78,6 +83,9 @@ class SegmentAnything3ONNX:
         prompt:
             List of mark dicts, each with keys ``"type"`` (``"rectangle"``
             or ``"point"``) and ``"data"``.
+        confidence_threshold:
+            Minimum score to keep a detection.  Detections with score below
+            this value are discarded.  Defaults to ``0.5``.
 
         Returns
         -------
@@ -114,7 +122,7 @@ class SegmentAnything3ONNX:
         box_labels_np = np.array([box_labels], dtype=np.int64)
         box_masks_np = np.array([box_masks], dtype=np.bool_)
 
-        masks, _scores, _boxes = self.decoder(
+        masks, scores, _boxes = self.decoder(
             original_size,
             embedding["vision_pos_enc_0"],
             embedding["vision_pos_enc_1"],
@@ -129,6 +137,15 @@ class SegmentAnything3ONNX:
             box_labels_np,
             box_masks_np,
         )
+
+        # Filter detections by confidence score.
+        if len(scores) > 0:
+            keep = np.where(scores > confidence_threshold)[0]
+            masks = (
+                masks[keep]
+                if len(keep) > 0
+                else np.zeros((0,) + masks.shape[1:], dtype=masks.dtype)
+            )
 
         return masks
 

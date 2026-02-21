@@ -37,6 +37,12 @@ argparser.add_argument(
     help="Path to the ONNX language encoder model (for SAM3)",
 )
 argparser.add_argument(
+    "--text_prompt",
+    type=str,
+    default=None,
+    help="Text prompt for SAM3 (e.g. 'truck'). Overrides any text entry in the prompt JSON.",
+)
+argparser.add_argument(
     "--image",
     type=str,
     default="images/truck.jpg",
@@ -90,11 +96,14 @@ prompt = json.load(open(args.prompt))
 
 text_prompt = None
 if args.sam_variant == "sam3":
-    # Extract text prompt from JSON if available, otherwise default to "visual"
-    for p in prompt:
-        if p["type"] == "text":
-            text_prompt = p["data"]
-            break
+    # --text_prompt takes priority; fall back to any text entry in the JSON.
+    if args.text_prompt:
+        text_prompt = args.text_prompt
+    else:
+        for p in prompt:
+            if p["type"] == "text":
+                text_prompt = p["data"]
+                break
     if text_prompt is None:
         text_prompt = "visual"
 
@@ -109,14 +118,14 @@ masks = model.predict_masks(embedding, prompt)
 # Merge masks
 mask = np.zeros((masks.shape[2], masks.shape[3], 3), dtype=np.uint8)
 if args.sam_variant == "sam3":
-    # SAM3 returns (N, 1, H, W) – render all N detected instances.
+    # SAM3 returns bool (N, 1, H, W) – render all N detected instances.
     for i in range(masks.shape[0]):
-        m = masks[i, 0]  # (H, W)
-        mask[m > 0.5] = [255, 0, 0]
+        m = masks[i, 0]  # (H, W) bool
+        mask[m] = [255, 0, 0]
 else:
-    # SAM1/SAM2 returns (1, 3, H, W) – merge all quality levels.
+    # SAM1/SAM2 return raw logits (1, 3, H, W) – threshold at 0 (= sigmoid 0.5).
     for m in masks[0, :, :, :]:
-        mask[m > 0.5] = [255, 0, 0]
+        mask[m > 0.0] = [255, 0, 0]
 
 # Binding image and mask
 visualized = cv2.addWeighted(image, 0.5, mask, 0.5, 0)
