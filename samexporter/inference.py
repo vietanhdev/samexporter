@@ -10,6 +10,7 @@ import numpy as np
 
 from samexporter.sam_onnx import SegmentAnythingONNX
 from samexporter.sam2_onnx import SegmentAnything2ONNX
+from samexporter.sam3_onnx import SegmentAnything3ONNX
 
 
 def str2bool(v):
@@ -28,6 +29,12 @@ argparser.add_argument(
     type=str,
     default="output_models/sam_vit_h_4b8939.decoder.onnx",
     help="Path to the ONNX decoder model",
+)
+argparser.add_argument(
+    "--language_encoder_model",
+    type=str,
+    default=None,
+    help="Path to the ONNX language encoder model (for SAM3)",
 )
 argparser.add_argument(
     "--image",
@@ -56,7 +63,7 @@ argparser.add_argument(
     "--sam_variant",
     type=str,
     default="sam",
-    help="Variant of SAM model. Options: sam, sam2",
+    help="Variant of SAM model. Options: sam, sam2, sam3",
 )
 args = argparser.parse_args()
 
@@ -71,11 +78,27 @@ elif args.sam_variant == "sam2":
         args.encoder_model,
         args.decoder_model,
     )
+elif args.sam_variant == "sam3":
+    model = SegmentAnything3ONNX(
+        args.encoder_model,
+        args.decoder_model,
+        args.language_encoder_model,
+    )
 
 image = cv2.imread(args.image)
 prompt = json.load(open(args.prompt))
 
-embedding = model.encode(image)
+text_prompt = None
+if args.sam_variant == "sam3":
+    # Extract text prompt from JSON if available, otherwise default to "visual"
+    for p in prompt:
+        if p["type"] == "text":
+            text_prompt = p["data"]
+            break
+    if text_prompt is None:
+        text_prompt = "visual"
+
+embedding = model.encode(image, text_prompt=text_prompt) if args.sam_variant == "sam3" else model.encode(image)
 
 masks = model.predict_masks(embedding, prompt)
 

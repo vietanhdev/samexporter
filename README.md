@@ -9,6 +9,7 @@ Exporting [Segment Anything](https://github.com/facebookresearch/segment-anythin
 
 **Supported models:**
 
+- Segment Anything 3 (ViT-H) - **New:** Supports text, box, and point prompts.
 - Segment Anything 2 (Tiny, Small, Base, Large) - **Note:** Experimental. Only image input is supported for now.
 - Segment Anything (SAM ViT-B, SAM ViT-L, SAM ViT-H)
 - MobileSAM
@@ -171,6 +172,29 @@ python -m samexporter.inference \
 
 ![truck_sam2](https://raw.githubusercontent.com/vietanhdev/samexporter/main/sample_outputs/sam2_truck.png)
 
+## Convert Segment Anything 3 to ONNX
+
+- Download SAM3 from [https://github.com/facebookresearch/sam3](https://github.com/facebookresearch/sam3).
+- Export SAM3 components (Image Encoder, Language Encoder, Decoder) to ONNX:
+
+```bash
+python -m samexporter.export_sam3 --output_dir output_models/sam3
+```
+
+- Inference using the exported SAM3 ONNX models:
+
+```bash
+python -m samexporter.inference \
+    --sam_variant sam3 \
+    --encoder_model output_models/sam3/sam3_image_encoder.onnx \
+    --decoder_model output_models/sam3/sam3_decoder.onnx \
+    --language_encoder_model output_models/sam3/sam3_language_encoder.onnx \
+    --image images/truck.jpg \
+    --prompt images/truck_sam3.json \
+    --output output_images/truck_sam3.png \
+    --show
+```
+
 ## Tips
 
 - Use "quantized" models for faster inference and smaller model size. However, the accuracy may be lower than the original models.
@@ -189,3 +213,4 @@ This project is licensed under the MIT License - see the [LICENSE](LICENSE) file
 ## References
 
 - ONNX-SAM2-Segment-Anything: [https://github.com/ibaiGorordo/ONNX-SAM2-Segment-Anything](https://github.com/ibaiGorordo/ONNX-SAM2-Segment-Anything).
+- sam3-onnx: [https://github.com/wkentaro/sam3-onnx](https://github.com/wkentaro/sam3-onnx).
