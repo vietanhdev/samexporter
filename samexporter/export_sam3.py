@@ -169,7 +169,7 @@ class SAM3Decoder(torch.nn.Module):
         return result["boxes"], result["scores"], result["masks"]
 
 
-def export_sam3(output_dir: str, opset: int = 17):
+def export_sam3(output_dir: str, opset: int = 18, simplify_model: bool = False):
     output_dir = pathlib.Path(output_dir)
     output_dir.mkdir(parents=True, exist_ok=True)
 
@@ -186,10 +186,11 @@ def export_sam3(output_dir: str, opset: int = 17):
     # Input: uint8 (3, 1008, 1008) – normalization is baked into the model.
     dummy_image = torch.zeros(3, 1008, 1008, dtype=torch.uint8).to(device)
     encoder_path = output_dir / "sam3_image_encoder.onnx"
-    torch.onnx.export(
+    torch.onnx.utils.export(
         image_encoder,
         args=(dummy_image,),
         f=str(encoder_path),
+        export_params=True,
         input_names=["image"],
         output_names=[
             "vision_pos_enc_0",
@@ -208,10 +209,11 @@ def export_sam3(output_dir: str, opset: int = 17):
     language_encoder = SAM3LanguageEncoder(processor)
     dummy_tokens = torch.zeros(1, 32, dtype=torch.long).to(device)
     language_path = output_dir / "sam3_language_encoder.onnx"
-    torch.onnx.export(
+    torch.onnx.utils.export(
         language_encoder,
         args=(dummy_tokens,),
         f=str(language_path),
+        export_params=True,
         input_names=["tokens"],
         # Names match the actual ONNX model output names used by inference code.
         output_names=["text_attention_mask", "text_memory", "text_embeds"],
@@ -236,7 +238,7 @@ def export_sam3(output_dir: str, opset: int = 17):
     orig_h = torch.tensor(1008).to(device)
     orig_w = torch.tensor(1008).to(device)
 
-    torch.onnx.export(
+    torch.onnx.utils.export(
         decoder,
         args=(
             orig_h, orig_w,
@@ -246,6 +248,7 @@ def export_sam3(output_dir: str, opset: int = 17):
             box_coords, box_labels, box_masks,
         ),
         f=str(decoder_path),
+        export_params=True,
         input_names=[
             "original_height",
             "original_width",
@@ -267,17 +270,18 @@ def export_sam3(output_dir: str, opset: int = 17):
     )
     print(f"Saved Decoder to {decoder_path}")
 
-    # ── Simplify all three models ─────────────────────────────────────────────
-    for path in [encoder_path, language_path, decoder_path]:
-        print(f"Simplifying {path}...")
-        try:
-            onnx_model = onnx.load(str(path))
-            model_simp, check = simplify(onnx_model)
-            assert check, "Simplified ONNX model could not be validated"
-            onnx.save(model_simp, str(path))
-            print(f"  → simplified OK")
-        except Exception as e:
-            print(f"  → simplification failed ({e}), keeping original")
+    # ── Simplify models conditionally ─────────────────────────────────────────
+    if simplify_model:
+        for path in [encoder_path, language_path, decoder_path]:
+            print(f"Simplifying {path}...")
+            try:
+                onnx_model = onnx.load(str(path))
+                model_simp, check = simplify(onnx_model)
+                assert check, "Simplified ONNX model could not be validated"
+                onnx.save(model_simp, str(path))
+                print(f"  → simplified OK")
+            except Exception as e:
+                print(f"  → simplification failed ({e}), keeping original")
 
 
 if __name__ == "__main__":
@@ -287,7 +291,10 @@ if __name__ == "__main__":
         help="Output directory for ONNX models"
     )
     parser.add_argument(
-        "--opset", type=int, default=17, help="ONNX opset version"
+        "--opset", type=int, default=18, help="ONNX opset version"
+    )
+    parser.add_argument(
+        "--simplify", action="store_true", help="Simplify ONNX models"
     )
     args = parser.parse_args()
-    export_sam3(args.output_dir, args.opset)
+    export_sam3(args.output_dir, args.opset, args.simplify)

@@ -1,6 +1,6 @@
-# SAM Exporter - Now with Segment Anything 2!~~
+# SAM Exporter - Now with Segment Anything 2 & 2.1!
 
-Exporting [Segment Anything](https://github.com/facebookresearch/segment-anything), [MobileSAM](https://github.com/ChaoningZhang/MobileSAM), and [Segment Anything 2](https://github.com/facebookresearch/segment-anything-2) into ONNX format for easy deployment.
+Exporting [Segment Anything](https://github.com/facebookresearch/segment-anything), [MobileSAM](https://github.com/ChaoningZhang/MobileSAM), [Segment Anything 2](https://github.com/facebookresearch/segment-anything-2), and [Segment Anything 2.1](https://github.com/facebookresearch/segment-anything-2) into ONNX format for easy deployment.
 
 [![PyPI version](https://badge.fury.io/py/samexporter.svg)](https://badge.fury.io/py/samexporter)
 [![Downloads](https://pepy.tech/badge/samexporter)](https://pepy.tech/project/samexporter)
@@ -10,7 +10,8 @@ Exporting [Segment Anything](https://github.com/facebookresearch/segment-anythin
 **Supported models:**
 
 - Segment Anything 3 (ViT-H) - **New:** Supports text, box, and point prompts.
-- Segment Anything 2 (Tiny, Small, Base, Large) - **Note:** Experimental. Only image input is supported for now.
+- Segment Anything 2.1 (Tiny, Small, Base+, Large) - Improved SAM2 with better accuracy. Only image input is supported.
+- Segment Anything 2 (Tiny, Small, Base+, Large) - **Note:** Experimental. Only image input is supported for now.
 - Segment Anything (SAM ViT-B, SAM ViT-L, SAM ViT-H)
 - MobileSAM
 
@@ -151,7 +152,7 @@ original_models
 pip install git+https://github.com/facebookresearch/segment-anything-2.git
 ```
 
-- Convert all Segment Anything models to ONNX format:
+- Convert all Segment Anything 2 (and 2.1) models to ONNX format:
 
 ```bash
 bash convert_all_meta_sam2.sh
@@ -171,6 +172,62 @@ python -m samexporter.inference \
 ```
 
 ![truck_sam2](https://raw.githubusercontent.com/vietanhdev/samexporter/main/sample_outputs/sam2_truck.png)
+
+## Convert Segment Anything 2.1 to ONNX
+
+SAM 2.1 is an improved version of SAM 2 with better accuracy and robustness. The conversion process is identical to SAM 2.
+
+- Download SAM 2.1 checkpoints. You can use the `download_all_models.sh` script which already includes SAM 2.1:
+
+```bash
+bash download_all_models.sh
+```
+
+The SAM 2.1 models will be downloaded to the `original_models` folder:
+
+```text
+original_models
+    + sam2.1_hiera_tiny.pt
+    + sam2.1_hiera_small.pt
+    + sam2.1_hiera_base_plus.pt
+    + sam2.1_hiera_large.pt
+   ...
+```
+
+- Install dependencies (same as SAM 2):
+
+```bash
+pip install git+https://github.com/facebookresearch/segment-anything-2.git
+```
+
+- Convert a SAM 2.1 model manually (example with Tiny variant):
+
+```bash
+python -m samexporter.export_sam2 \
+    --checkpoint "original_models/sam2.1_hiera_tiny.pt" \
+    --output_encoder "output_models/sam2.1_hiera_tiny.encoder.onnx" \
+    --output_decoder "output_models/sam2.1_hiera_tiny.decoder.onnx" \
+    --model_type sam2.1_hiera_tiny
+```
+
+- Or convert all SAM 2 and SAM 2.1 models at once:
+
+```bash
+bash convert_all_meta_sam2.sh
+```
+
+- Inference using the exported SAM 2.1 ONNX model:
+
+```bash
+python -m samexporter.inference \
+    --encoder_model "output_models/sam2.1_hiera_tiny.encoder.onnx" \
+    --decoder_model "output_models/sam2.1_hiera_tiny.decoder.onnx" \
+    --image images/plants.png \
+    --prompt images/truck_prompt_2.json \
+    --output output_images/plants_prompt_2_sam21.png \
+    --sam_variant sam2 \
+    --show
+```
 
 ## Convert Segment Anything 3 to ONNX
 

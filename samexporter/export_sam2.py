@@ -177,14 +177,20 @@ if __name__ == "__main__":
         "--model_type",
         type=str,
         required=True,
-        help="In the form of sam2_hiera_{tiny, small, base_plus, large}.",
+        help="SAM2 model type: sam2_hiera_{tiny,small,base_plus,large} or sam2.1_hiera_{tiny,small,base_plus,large}.",
     )
 
     parser.add_argument(
         "--opset",
         type=int,
-        default=17,
+        default=18,
         help="The ONNX opset version to use. Must be >=11",
+    )
+
+    parser.add_argument(
+        "--simplify",
+        action="store_true",
+        help="Simplify the exported ONNX model",
     )
 
     args = parser.parse_args()
@@ -198,16 +204,38 @@ if __name__ == "__main__":
         model_cfg = "sam2_hiera_s.yaml"
     elif model_type == "sam2_hiera_base_plus":
         model_cfg = "sam2_hiera_b+.yaml"
+    elif model_type == "sam2_hiera_large":
+        model_cfg = "sam2_hiera_l.yaml"
+    elif model_type == "sam2.1_hiera_tiny":
+        model_cfg = "sam2.1/sam2.1_hiera_t.yaml"
+    elif model_type == "sam2.1_hiera_small":
+        model_cfg = "sam2.1/sam2.1_hiera_s.yaml"
+    elif model_type == "sam2.1_hiera_base_plus":
+        model_cfg = "sam2.1/sam2.1_hiera_b+.yaml"
+    elif model_type == "sam2.1_hiera_large":
+        model_cfg = "sam2.1/sam2.1_hiera_l.yaml"
     else:
         model_cfg = "sam2_hiera_l.yaml"
 
-    sam2_model = build_sam2(model_cfg, args.checkpoint, device="cpu")
+    # Register the config directory with Hydra
+    from hydra.core.global_hydra import GlobalHydra
+    from hydra import initialize_config_dir, compose
+    import os
+
+    # Clear any existing Hydra instance
+    GlobalHydra.instance().clear()
+
+    # Get absolute path to sam2_configs
+    config_dir = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "sam2_configs"))
+    
+    with initialize_config_dir(config_dir=config_dir, version_base="1.2"):
+        sam2_model = build_sam2(model_cfg, args.checkpoint, device="cpu")
     img = torch.randn(1, 3, input_size[0], input_size[1]).cpu()
     sam2_encoder = SAM2ImageEncoder(sam2_model).cpu()
     high_res_feats_0, high_res_feats_1, image_embed = sam2_encoder(img)
 
     pathlib.Path(args.output_encoder).parent.mkdir(parents=True, exist_ok=True)
-    torch.onnx.export(
+    torch.onnx.utils.export(
         sam2_encoder,
         img,
         args.output_encoder,
@@ -218,12 +246,13 @@ if __name__ == "__main__":
         output_names=["high_res_feats_0", "high_res_feats_1", "image_embed"],
     )
     print("Saved encoder to", args.output_encoder)
-    print("Simplifying encoder...")
-    onnx_model = onnx.load(args.output_encoder)
-    model_simp, check = simplify(onnx_model)
-    assert check, "Simplified ONNX model could not be validated"
-    onnx.save(model_simp, args.output_encoder)
-    print("Saved simplified encoder to", args.output_encoder)
+    if args.simplify:
+        print("Simplifying encoder...")
+        onnx_model = onnx.load(args.output_encoder)
+        model_simp, check = simplify(onnx_model)
+        assert check, "Simplified ONNX model could not be validated"
+        onnx.save(model_simp, args.output_encoder)
+        print("Saved simplified encoder to", args.output_encoder)
 
     sam2_decoder = SAM2ImageDecoder(
         sam2_model, multimask_output=multimask_output
@@ -258,7 +287,7 @@ if __name__ == "__main__":
     )
 
     pathlib.Path(args.output_decoder).parent.mkdir(parents=True, exist_ok=True)
-    torch.onnx.export(
+    torch.onnx.utils.export(
         sam2_decoder,
         (
             image_embed,
@@ -291,9 +320,10 @@ if __name__ == "__main__":
         },
     )
     print("Saved decoder to", args.output_decoder)
-    print("Simplifying decoder...")
-    onnx_model = onnx.load(args.output_decoder)
-    model_simp, check = simplify(onnx_model)
-    assert check, "Simplified ONNX model could not be validated"
-    onnx.save(model_simp, args.output_decoder)
-    print("Saved simplified decoder to", args.output_decoder)
+    if args.simplify:
+        print("Simplifying decoder...")
+        onnx_model = onnx.load(args.output_decoder)
+        model_simp, check = simplify(onnx_model)
+        assert check, "Simplified ONNX model could not be validated"
+        onnx.save(model_simp, args.output_decoder)
+        print("Saved simplified decoder to", args.output_decoder)

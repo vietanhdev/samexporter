@@ -45,7 +45,7 @@ argparser.add_argument(
 argparser.add_argument(
     "--prompt",
     type=str,
-    default="images/truck.json",
+    default="images/truck_prompt.json",
     help="Path to the image",
 )
 argparser.add_argument(
@@ -104,8 +104,15 @@ masks = model.predict_masks(embedding, prompt)
 
 # Merge masks
 mask = np.zeros((masks.shape[2], masks.shape[3], 3), dtype=np.uint8)
-for m in masks[0, :, :, :]:
-    mask[m > 0.5] = [255, 0, 0]
+if args.sam_variant == "sam3":
+    # SAM3 returns (N, 1, H, W) – render all N detected instances.
+    for i in range(masks.shape[0]):
+        m = masks[i, 0]  # (H, W)
+        mask[m > 0.5] = [255, 0, 0]
+else:
+    # SAM1/SAM2 returns (1, 3, H, W) – merge all quality levels.
+    for m in masks[0, :, :, :]:
+        mask[m > 0.5] = [255, 0, 0]
 
 # Binding image and mask
 visualized = cv2.addWeighted(image, 0.5, mask, 0.5, 0)

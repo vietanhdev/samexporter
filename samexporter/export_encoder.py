@@ -48,7 +48,7 @@ parser.add_argument(
 parser.add_argument(
     "--opset",
     type=int,
-    default=17,
+    default=18,
     help="The ONNX opset version to use. Must be >=11",
 )
 
@@ -131,7 +131,7 @@ def run_export(
         if model_type == "vit_h":
             tmp_dir = mkdtemp()
             tmp_model_path = os.path.join(tmp_dir, f"{onnx_base}.onnx")
-            torch.onnx.export(
+            torch.onnx.utils.export(
                 onnx_model,
                 tuple(dummy_input.values()),
                 tmp_model_path,
@@ -161,19 +161,18 @@ def run_export(
             # Cleanup the temporary directory
             shutil.rmtree(tmp_dir)
         else:
-            with open(output, "wb") as f:
-                torch.onnx.export(
-                    onnx_model,
-                    tuple(dummy_input.values()),
-                    f,
-                    export_params=True,
-                    verbose=False,
-                    opset_version=opset,
-                    do_constant_folding=True,
-                    input_names=list(dummy_input.keys()),
-                    output_names=output_names,
-                    dynamic_axes=dynamic_axes,
-                )
+            torch.onnx.utils.export(
+                onnx_model,
+                tuple(dummy_input.values()),
+                output,
+                export_params=True,
+                verbose=False,
+                opset_version=opset,
+                do_constant_folding=True,
+                input_names=list(dummy_input.keys()),
+                output_names=output_names,
+                dynamic_axes=dynamic_axes,
+            )
 
 
 def to_numpy(tensor):
