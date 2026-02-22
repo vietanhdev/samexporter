@@ -6,7 +6,6 @@ from unittest.mock import MagicMock
 
 import onnx
 import torch
-from onnxsim import simplify
 from torchvision.transforms import v2
 
 # Mock triton for Windows – must happen before any sam3 imports.
@@ -285,6 +284,8 @@ def export_sam3(output_dir: str, opset: int = 18, simplify_model: bool = False):
 
     # ── Simplify models conditionally ─────────────────────────────────────────
     if simplify_model:
+        from onnxsim import simplify
+
         for path in [encoder_path, language_path, decoder_path]:
             print(f"Simplifying {path}...")
             try:

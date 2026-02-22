@@ -4,7 +4,6 @@ from typing import Any
 
 import onnx
 import torch
-from onnxsim import simplify
 from sam2.build_sam import build_sam2
 from sam2.modeling.sam2_base import SAM2Base
 from torch import nn
@@ -217,9 +216,9 @@ if __name__ == "__main__":
     # Clear any existing Hydra instance
     GlobalHydra.instance().clear()
 
-    # Get absolute path to sam2_configs
+    # Get absolute path to sam2_configs (bundled inside the samexporter package)
     config_dir = os.path.abspath(
-        os.path.join(os.path.dirname(__file__), "..", "sam2_configs")
+        os.path.join(os.path.dirname(__file__), "sam2_configs")
     )
 
     with initialize_config_dir(config_dir=config_dir, version_base="1.2"):
@@ -242,6 +241,8 @@ if __name__ == "__main__":
     print("Saved encoder to", args.output_encoder)
     if args.simplify:
         print("Simplifying encoder...")
+        from onnxsim import simplify
+
         onnx_model = onnx.load(args.output_encoder)
         model_simp, check = simplify(onnx_model)
         assert check, "Simplified ONNX model could not be validated"
@@ -312,6 +313,8 @@ if __name__ == "__main__":
     print("Saved decoder to", args.output_decoder)
     if args.simplify:
         print("Simplifying decoder...")
+        from onnxsim import simplify
+
         onnx_model = onnx.load(args.output_decoder)
         model_simp, check = simplify(onnx_model)
         assert check, "Simplified ONNX model could not be validated"

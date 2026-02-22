@@ -4,19 +4,19 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "samexporter"
-version = "0.4.4"
+version = "0.4.5"
 description = "Exporting Segment Anything models ONNX format"
 authors = [
     {name = "Viet Anh Nguyen", email = "vietanh.dev@gmail.com"},
 ]
 readme = "README.md"
 requires-python = ">=3.11"
-license = {file = "LICENSE"}
+license = "MIT"
+license-files = ["LICENSE"]
 classifiers = [
     "Programming Language :: Python :: 3.11",
     "Programming Language :: Python :: 3.12",
     "Programming Language :: Python :: 3.13",
-    "License :: OSI Approved :: MIT License",
     "Operating System :: OS Independent",
 ]
 
@@ -28,7 +28,6 @@ dependencies = [
     "torch==2.10.0",
     "torchvision==0.25.0",
     "timm==0.9.2",
-    "onnxsim==0.5.0",
     "numpy==1.26.4",
     "onnxscript==0.6.2",
     "osam",  # CLIP tokeniser for SAM3 text prompts
@@ -39,13 +38,16 @@ dependencies = [
 "Bug Tracker" = "https://github.com/vietanhdev/samexporter/issues"
 
 [project.optional-dependencies]
-dev = ["ruff", "pre-commit"]
+# onnxsim has no Windows wheel; the source tarball exceeds Windows 260-char
+# path limits.  Install with: pip install samexporter[export]
+export = ["onnxsim==0.5.0"]
+dev = ["ruff", "pre-commit", "pytest"]
 
 [tool.setuptools]
-packages = ["samexporter"]
+packages = ["samexporter", "samexporter.mobile_encoder", "samexporter.sam2_configs"]
 
 [tool.setuptools.package-data]
-"samexporter.sam2_configs" = ["*.py", "*.yaml"]
+"samexporter.sam2_configs" = ["*.yaml", "sam2.1/*.yaml"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
