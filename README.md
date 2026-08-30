@@ -466,7 +466,10 @@ Additional guidance:
 - TensorRT is usable through `TensorrtExecutionProvider`. Dynamic models may
   incur engine-build/cache time; for repeatable deployment, configure the
   provider's engine cache and shape profiles or build fixed min/opt/max engines
-  as demonstrated by EfficientViT-SAM upstream.
+  as demonstrated by EfficientViT-SAM upstream. When building a SAM decoder
+  directly with TensorRT, `orig_im_size` is a *shape tensor*: configure its
+  value profile with `profile.set_shape_input("orig_im_size", min_values,
+  opt_values, max_values)` in addition to ordinary dynamic tensor profiles.
 - Quantized `*.quant.onnx` files primarily reduce storage and memory. Benchmark
   accuracy and latency on the target CPU—dynamic quantization is not guaranteed
   to accelerate convolution-heavy encoders.
