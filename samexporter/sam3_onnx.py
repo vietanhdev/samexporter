@@ -4,6 +4,9 @@ import cv2
 import numpy as np
 import onnxruntime
 
+from samexporter.clip_tokenizer import tokenize
+from samexporter.runtime import get_onnx_providers
+
 
 class SegmentAnything3ONNX:
     """Segmentation model using Segment Anything 3 (SAM3)"""
@@ -13,12 +16,16 @@ class SegmentAnything3ONNX:
         image_encoder_path,
         decoder_model_path,
         language_encoder_path=None,
+        providers=None,
     ) -> None:
-        self.image_encoder = SAM3ImageEncoder(image_encoder_path)
+        providers = get_onnx_providers(providers)
+        self.image_encoder = SAM3ImageEncoder(image_encoder_path, providers)
         self.language_encoder = None
         if language_encoder_path:
-            self.language_encoder = SAM3LanguageEncoder(language_encoder_path)
-        self.decoder = SAM3ImageDecoder(decoder_model_path)
+            self.language_encoder = SAM3LanguageEncoder(
+                language_encoder_path, providers
+            )
+        self.decoder = SAM3ImageDecoder(decoder_model_path, providers)
 
     def encode(self, cv_image: np.ndarray, text_prompt=None) -> dict[str, Any]:
         """Encode an image (and optional text prompt) into an embedding dict.
@@ -37,6 +44,8 @@ class SegmentAnything3ONNX:
             original_size, vision_pos_enc_{0,1,2}, backbone_fpn_{0,1,2},
             language_mask, language_features, language_embeds.
         """
+        if cv_image is None or cv_image.ndim != 3 or cv_image.shape[2] != 3:
+            raise ValueError("Expected a non-empty BGR image with three channels")
         original_size = cv_image.shape[:2]
         image_encoder_outputs = self.image_encoder(cv_image)
 
@@ -73,6 +82,10 @@ class SegmentAnything3ONNX:
         embedding: dict[str, Any],
         prompt,
         confidence_threshold: float = 0.5,
+        nms_threshold: float | None = 0.7,
+        nms_mode: str = "mask",
+        max_instances: int | None = None,
+        prefer_prompted_region: bool = False,
     ) -> np.ndarray:
         """Run the decoder for the given geometric prompt.
 
@@ -86,6 +99,17 @@ class SegmentAnything3ONNX:
         confidence_threshold:
             Minimum score to keep a detection.  Detections with score below
             this value are discarded.  Defaults to ``0.5``.
+        nms_threshold:
+            IoU threshold used to suppress duplicate queries. Set to ``None``
+            to retain threshold-only behavior.
+        nms_mode:
+            ``"mask"`` follows the official SAM3 mask-IoU NMS behavior;
+            ``"box"`` is faster for very large masks; ``"none"`` disables NMS.
+        max_instances:
+            Optional maximum number of masks, after ranking and NMS.
+        prefer_prompted_region:
+            Rank masks overlapping positive points/rectangles ahead of remote
+            concept matches. Useful when geometry is intended as a selection.
 
         Returns
         -------
@@ -93,36 +117,67 @@ class SegmentAnything3ONNX:
         of detected objects and *H* × *W* is the original image resolution.
         """
         original_size = embedding["original_size"]
-        box_coords = [0.0, 0.0, 0.0, 0.0]
-        box_labels = [1]
-        # box_masks: True  → dummy / no real box
-        #            False → a real box is provided
-        box_masks = [True]
+        box_coords = []
+        box_labels = []
 
-        for mark in prompt:
-            if mark["type"] == "rectangle":
-                x1, y1, x2, y2 = mark["data"]
+        for index, mark in enumerate(prompt):
+            if not isinstance(mark, dict):
+                raise ValueError(f"Prompt mark {index} must be an object")
+            mark_type = mark.get("type")
+            if mark_type == "text":
+                continue
+            data = mark.get("data")
+            if mark_type == "rectangle":
+                if not isinstance(data, (list, tuple)) or len(data) != 4:
+                    raise ValueError(
+                        f"Rectangle mark {index} must contain [x1, y1, x2, y2]"
+                    )
+                x1, y1, x2, y2 = map(float, data)
+                if x2 <= x1 or y2 <= y1:
+                    raise ValueError(f"Rectangle mark {index} must have positive area")
                 cx = (x1 + x2) / 2.0 / original_size[1]
                 cy = (y1 + y2) / 2.0 / original_size[0]
                 w = (x2 - x1) / original_size[1]
                 h = (y2 - y1) / original_size[0]
-                box_coords = [cx, cy, w, h]
-                box_masks = [False]
-                break
-            elif mark["type"] == "point":
-                x, y = mark["data"]
+                box_coords.append([cx, cy, w, h])
+                box_labels.append(1)
+            elif mark_type == "point":
+                if not isinstance(data, (list, tuple)) or len(data) != 2:
+                    raise ValueError(f"Point mark {index} must contain [x, y]")
+                label = mark.get("label")
+                if label not in (0, 1):
+                    raise ValueError(f"Point mark {index} label must be 0 or 1")
+                x, y = map(float, data)
                 cx = x / original_size[1]
                 cy = y / original_size[0]
                 # Point is represented as a very small box (1 % of image).
-                box_coords = [cx, cy, 0.01, 0.01]
-                box_masks = [False]
-                break
+                box_coords.append([cx, cy, 0.01, 0.01])
+                box_labels.append(label)
+            else:
+                raise ValueError(
+                    f"Unsupported prompt type at mark {index}: {mark_type!r}"
+                )
 
-        box_coords_np = np.array(box_coords, dtype=np.float32).reshape(1, 1, 4)
-        box_labels_np = np.array([box_labels], dtype=np.int64)
-        box_masks_np = np.array([box_masks], dtype=np.bool_)
+        mark_count = len(box_coords)
+        capacity = self.decoder.geometric_prompt_capacity
+        if capacity is not None and mark_count > capacity:
+            raise ValueError(
+                f"SAM3 decoder accepts at most {capacity} geometric prompts; "
+                "re-export it with a larger --max-geometric-prompts value"
+            )
+        tensor_length = capacity or max(mark_count, 1)
+        # SAM3's Prompt contract is sequence-first: [num_marks, batch, C].
+        # ONNX traces its internal geometry attention at a fixed token count,
+        # so exported decoders use padded slots and mark them True in box_masks.
+        box_coords_np = np.zeros((tensor_length, 1, 4), dtype=np.float32)
+        box_labels_np = np.ones((tensor_length, 1), dtype=np.int64)
+        box_masks_np = np.ones((1, tensor_length), dtype=np.bool_)
+        if mark_count:
+            box_coords_np[:mark_count, 0] = np.asarray(box_coords, dtype=np.float32)
+            box_labels_np[:mark_count, 0] = np.asarray(box_labels, dtype=np.int64)
+            box_masks_np[0, :mark_count] = False
 
-        masks, scores, _boxes = self.decoder(
+        masks, scores, boxes = self.decoder(
             original_size,
             embedding["vision_pos_enc_0"],
             embedding["vision_pos_enc_1"],
@@ -138,16 +193,212 @@ class SegmentAnything3ONNX:
             box_masks_np,
         )
 
-        # Filter detections by confidence score.
-        if len(scores) > 0:
-            keep = np.where(scores > confidence_threshold)[0]
-            masks = (
-                masks[keep]
-                if len(keep) > 0
-                else np.zeros((0,) + masks.shape[1:], dtype=masks.dtype)
-            )
-
+        masks, _scores, _boxes = self.select_detections(
+            masks,
+            scores,
+            boxes,
+            prompt,
+            confidence_threshold=confidence_threshold,
+            nms_threshold=nms_threshold,
+            nms_mode=nms_mode,
+            max_instances=max_instances,
+            prefer_prompted_region=prefer_prompted_region,
+        )
         return masks
+
+    @staticmethod
+    def select_detections(
+        masks: np.ndarray,
+        scores: np.ndarray,
+        boxes: np.ndarray,
+        prompt,
+        *,
+        confidence_threshold: float,
+        nms_threshold: float | None,
+        nms_mode: str,
+        max_instances: int | None,
+        prefer_prompted_region: bool,
+    ) -> tuple[np.ndarray, np.ndarray, np.ndarray]:
+        """Filter and rank raw SAM3 detections without model dependencies."""
+        if not 0.0 <= confidence_threshold <= 1.0:
+            raise ValueError("confidence_threshold must be between 0 and 1")
+        if nms_threshold is not None and not 0.0 <= nms_threshold <= 1.0:
+            raise ValueError("nms_threshold must be between 0 and 1 or None")
+        if nms_mode not in ("mask", "box", "none"):
+            raise ValueError("nms_mode must be 'mask', 'box', or 'none'")
+        if max_instances is not None and max_instances < 1:
+            raise ValueError("max_instances must be at least 1 or None")
+
+        masks = np.asarray(masks)
+        scores = np.asarray(scores, dtype=np.float32).reshape(-1)
+        boxes = np.asarray(boxes, dtype=np.float32).reshape(-1, 4)
+        if not (len(masks) == len(scores) == len(boxes)):
+            raise ValueError("SAM3 masks, scores, and boxes must have equal lengths")
+
+        keep = np.flatnonzero(np.isfinite(scores) & (scores > confidence_threshold))
+        if not len(keep):
+            return (
+                np.zeros((0,) + masks.shape[1:], dtype=masks.dtype),
+                np.zeros((0,), dtype=np.float32),
+                np.zeros((0, 4), dtype=np.float32),
+            )
+        masks, scores, boxes = masks[keep], scores[keep], boxes[keep]
+
+        order = np.argsort(-scores, kind="stable")
+        masks, scores, boxes = masks[order], scores[order], boxes[order]
+        if nms_mode != "none" and nms_threshold is not None and len(boxes) > 1:
+            if nms_mode == "mask":
+                keep = SegmentAnything3ONNX._mask_nms(masks, scores, nms_threshold)
+            else:
+                keep = SegmentAnything3ONNX._box_nms(boxes, scores, nms_threshold)
+            masks, scores, boxes = masks[keep], scores[keep], boxes[keep]
+
+        if prefer_prompted_region and len(masks) > 1:
+            relevance = SegmentAnything3ONNX._prompt_relevance(masks, boxes, prompt)
+            order = np.lexsort((-scores, -relevance))
+            masks, scores, boxes = masks[order], scores[order], boxes[order]
+
+        if max_instances is not None:
+            masks = masks[:max_instances]
+            scores = scores[:max_instances]
+            boxes = boxes[:max_instances]
+        return masks, scores, boxes
+
+    @staticmethod
+    def _box_nms(boxes: np.ndarray, scores: np.ndarray, threshold: float) -> np.ndarray:
+        """Return score-ordered indices after standard XYXY box NMS."""
+        x1, y1, x2, y2 = boxes.T
+        areas = np.maximum(0.0, x2 - x1) * np.maximum(0.0, y2 - y1)
+        order = np.argsort(-scores, kind="stable")
+        kept: list[int] = []
+        while len(order):
+            current = int(order[0])
+            kept.append(current)
+            if len(order) == 1:
+                break
+            rest = order[1:]
+            intersection_width = np.maximum(
+                0.0,
+                np.minimum(x2[current], x2[rest]) - np.maximum(x1[current], x1[rest]),
+            )
+            intersection_height = np.maximum(
+                0.0,
+                np.minimum(y2[current], y2[rest]) - np.maximum(y1[current], y1[rest]),
+            )
+            intersection = intersection_width * intersection_height
+            union = areas[current] + areas[rest] - intersection
+            iou = np.divide(
+                intersection,
+                union,
+                out=np.zeros_like(intersection),
+                where=union > 0,
+            )
+            order = rest[iou <= threshold]
+        return np.asarray(kept, dtype=np.int64)
+
+    @staticmethod
+    def _mask_nms(
+        masks: np.ndarray, scores: np.ndarray, threshold: float
+    ) -> np.ndarray:
+        """Return score-ordered indices after bit-packed mask-IoU NMS.
+
+        SAM3's official NMS uses mask overlap. Masks are sampled to at most
+        288 pixels on their longest side (the native SAM3 mask-head scale),
+        then packed into bits so large original-resolution outputs do not make
+        duplicate suppression memory-bound.
+        """
+        binary = np.asarray(masks, dtype=bool)
+        if binary.ndim == 4 and binary.shape[1] == 1:
+            binary = binary[:, 0]
+        if binary.ndim != 3:
+            raise ValueError("SAM3 masks must have shape (N, 1, H, W) or (N, H, W)")
+        step = max(1, int(np.ceil(max(binary.shape[-2:]) / 288)))
+        sampled = binary[:, ::step, ::step].reshape(len(binary), -1)
+        packed = np.packbits(sampled, axis=1)
+        bit_counts = np.unpackbits(np.arange(256, dtype=np.uint8)[:, None], axis=1).sum(
+            axis=1
+        )
+        areas = bit_counts[packed].sum(axis=1, dtype=np.int64)
+
+        order = np.argsort(-scores, kind="stable")
+        kept: list[int] = []
+        while len(order):
+            current = int(order[0])
+            kept.append(current)
+            if len(order) == 1:
+                break
+            rest = order[1:]
+            intersections = bit_counts[
+                np.bitwise_and(packed[rest], packed[current])
+            ].sum(axis=1, dtype=np.int64)
+            unions = areas[current] + areas[rest] - intersections
+            iou = np.divide(
+                intersections,
+                unions,
+                out=np.zeros(len(rest), dtype=np.float64),
+                where=unions > 0,
+            )
+            order = rest[iou <= threshold]
+        return np.asarray(kept, dtype=np.int64)
+
+    @staticmethod
+    def _prompt_relevance(masks: np.ndarray, boxes: np.ndarray, prompt) -> np.ndarray:
+        """Score positive-point/rectangle overlap for selection-style prompting."""
+        relevance = np.zeros(len(masks), dtype=np.float32)
+        mask_height, mask_width = masks.shape[-2:]
+        for mark in prompt:
+            if not isinstance(mark, dict) or mark.get("label", 1) != 1:
+                continue
+            data = mark.get("data")
+            if (
+                mark.get("type") == "point"
+                and isinstance(data, (list, tuple))
+                and len(data) == 2
+            ):
+                x = int(np.clip(round(float(data[0])), 0, mask_width - 1))
+                y = int(np.clip(round(float(data[1])), 0, mask_height - 1))
+                relevance += masks[:, 0, y, x].astype(np.float32) * 2.0
+                relevance += (
+                    (boxes[:, 0] <= x)
+                    & (x <= boxes[:, 2])
+                    & (boxes[:, 1] <= y)
+                    & (y <= boxes[:, 3])
+                ).astype(np.float32)
+            elif (
+                mark.get("type") == "rectangle"
+                and isinstance(data, (list, tuple))
+                and len(data) == 4
+            ):
+                prompt_box = np.asarray(data, dtype=np.float32)
+                ix1 = np.maximum(boxes[:, 0], prompt_box[0])
+                iy1 = np.maximum(boxes[:, 1], prompt_box[1])
+                ix2 = np.minimum(boxes[:, 2], prompt_box[2])
+                iy2 = np.minimum(boxes[:, 3], prompt_box[3])
+                intersection = np.maximum(0.0, ix2 - ix1) * np.maximum(0.0, iy2 - iy1)
+                box_area = np.maximum(0.0, boxes[:, 2] - boxes[:, 0]) * np.maximum(
+                    0.0, boxes[:, 3] - boxes[:, 1]
+                )
+                prompt_area = max(
+                    0.0,
+                    float(prompt_box[2] - prompt_box[0])
+                    * float(prompt_box[3] - prompt_box[1]),
+                )
+                union = box_area + prompt_area - intersection
+                relevance += np.divide(
+                    intersection,
+                    union,
+                    out=np.zeros_like(intersection),
+                    where=union > 0,
+                )
+                center_x = (boxes[:, 0] + boxes[:, 2]) / 2.0
+                center_y = (boxes[:, 1] + boxes[:, 3]) / 2.0
+                relevance += (
+                    (prompt_box[0] <= center_x)
+                    & (center_x <= prompt_box[2])
+                    & (prompt_box[1] <= center_y)
+                    & (center_y <= prompt_box[3])
+                ).astype(np.float32)
+        return relevance
 
     def transform_masks(self, masks, original_size, transform_matrix):
         """No-op: SAM3 already outputs masks in original image resolution."""
@@ -164,9 +415,9 @@ class SAM3ImageEncoder:
     dtype : uint8 (the model includes normalization internally)
     """
 
-    def __init__(self, path: str) -> None:
+    def __init__(self, path: str, providers=None) -> None:
         self.session = onnxruntime.InferenceSession(
-            path, providers=onnxruntime.get_available_providers()
+            path, providers=get_onnx_providers(providers)
         )
         encoder_input = self.session.get_inputs()[0]
         self.input_name: str = encoder_input.name
@@ -222,29 +473,13 @@ class SAM3LanguageEncoder:
     dtype : int64
     """
 
-    def __init__(self, path: str) -> None:
+    def __init__(self, path: str, providers=None) -> None:
         self.session = onnxruntime.InferenceSession(
-            path, providers=onnxruntime.get_available_providers()
+            path, providers=get_onnx_providers(providers)
         )
-        try:
-            from osam._models.yoloworld.clip import tokenize
-
-            self._tokenize = tokenize
-        except ImportError:
-            self._tokenize = self._fallback_tokenize
-
-    def _fallback_tokenize(self, texts, context_length: int = 32) -> np.ndarray:
-        """Minimal CLIP-style tokeniser fallback (zeros = empty sequence).
-
-        Warning: the model will produce near-random language features when
-        this fallback is used.  Install ``osam`` for correct tokenisation.
-        """
-        return np.zeros((len(texts), context_length), dtype=np.int64)
 
     def __call__(self, text: str) -> list[np.ndarray]:
-        tokens = self._tokenize([text], context_length=32)
-        if not isinstance(tokens, np.ndarray):
-            tokens = np.asarray(tokens, dtype=np.int64)
+        tokens = tokenize([text], context_length=32)
         return self.session.run(None, {"tokens": tokens})
 
 
@@ -260,11 +495,24 @@ class SAM3ImageDecoder:
     callers can unpack in a semantically natural order.
     """
 
-    def __init__(self, path: str) -> None:
+    def __init__(self, path: str, providers=None) -> None:
         self.session = onnxruntime.InferenceSession(
-            path, providers=onnxruntime.get_available_providers()
+            path, providers=get_onnx_providers(providers)
         )
         self.input_names: list[str] = [i.name for i in self.session.get_inputs()]
+        self.output_names: list[str] = [
+            output.name for output in self.session.get_outputs()
+        ]
+        box_input = next(
+            (item for item in self.session.get_inputs() if item.name == "box_coords"),
+            None,
+        )
+        first_dimension = box_input.shape[0] if box_input is not None else None
+        self.geometric_prompt_capacity = (
+            first_dimension
+            if isinstance(first_dimension, int) and first_dimension > 0
+            else None
+        )
 
     def __call__(
         self,
@@ -319,6 +567,46 @@ class SAM3ImageDecoder:
             k: v for k, v in inputs.items() if k in self.input_names and v is not None
         }
         outputs = self.session.run(None, model_inputs)
-        # ONNX export order: [0]=boxes, [1]=scores, [2]=masks
-        # Return as (masks, scores, boxes) for caller convenience.
+        if "pred_logits" in self.output_names:
+            raw = dict(zip(self.output_names, outputs))
+            return self.postprocess_raw_outputs(raw, original_size)
+
+        # Backward compatibility with older exports whose processor-based
+        # graph returned already-filtered [boxes, scores, masks].
         return outputs[2], outputs[1], outputs[0]
+
+    @staticmethod
+    def postprocess_raw_outputs(raw, original_size):
+        """Match the official Sam3Processor postprocessing outside ONNX."""
+        logits = np.asarray(raw["pred_logits"])[0].squeeze(-1)
+        presence = np.asarray(raw["presence_logit_dec"]).reshape(-1)[0]
+
+        def sigmoid(value):
+            return 1.0 / (1.0 + np.exp(-np.clip(value, -80, 80)))
+
+        scores = sigmoid(logits) * sigmoid(presence)
+
+        raw_masks = np.asarray(raw["pred_masks"])[0]
+        height, width = original_size
+        masks = np.stack(
+            [
+                sigmoid(
+                    cv2.resize(mask, (width, height), interpolation=cv2.INTER_LINEAR)
+                )
+                > 0.5
+                for mask in raw_masks
+            ]
+        )[:, None]
+
+        boxes_cxcywh = np.asarray(raw["pred_boxes"])[0]
+        cx, cy, box_width, box_height = boxes_cxcywh.T
+        boxes = np.stack(
+            [
+                (cx - box_width / 2) * width,
+                (cy - box_height / 2) * height,
+                (cx + box_width / 2) * width,
+                (cy + box_height / 2) * height,
+            ],
+            axis=-1,
+        )
+        return masks, scores, boxes

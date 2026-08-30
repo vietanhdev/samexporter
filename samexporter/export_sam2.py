@@ -4,9 +4,25 @@ from typing import Any
 
 import onnx
 import torch
-from sam2.build_sam import build_sam2
-from sam2.modeling.sam2_base import SAM2Base
 from torch import nn
+
+from samexporter.upstream import prefer_pinned_upstream
+
+prefer_pinned_upstream("sam2")
+
+from sam2.build_sam import build_sam2  # noqa: E402
+from sam2.modeling.sam2_base import SAM2Base  # noqa: E402
+
+MODEL_CONFIGS = {
+    "sam2_hiera_tiny": "sam2_hiera_t.yaml",
+    "sam2_hiera_small": "sam2_hiera_s.yaml",
+    "sam2_hiera_base_plus": "sam2_hiera_b+.yaml",
+    "sam2_hiera_large": "sam2_hiera_l.yaml",
+    "sam2.1_hiera_tiny": "sam2.1/sam2.1_hiera_t.yaml",
+    "sam2.1_hiera_small": "sam2.1/sam2.1_hiera_s.yaml",
+    "sam2.1_hiera_base_plus": "sam2.1/sam2.1_hiera_b+.yaml",
+    "sam2.1_hiera_large": "sam2.1/sam2.1_hiera_l.yaml",
+}
 
 
 class SAM2ImageEncoder(nn.Module):
@@ -84,7 +100,7 @@ class SAM2ImageDecoder(nn.Module):
             masks = masks[:, 1:, :, :]
             iou_predictions = iou_predictions[:, 1:]
         else:
-            masks, iou_pred = self.mask_decoder._dynamic_multimask_via_stability(
+            masks, iou_predictions = self.mask_decoder._dynamic_multimask_via_stability(
                 masks, iou_predictions
             )
 
@@ -165,7 +181,7 @@ if __name__ == "__main__":
 
     parser.add_argument(
         "--model_type",
-        type=str,
+        choices=tuple(MODEL_CONFIGS),
         required=True,
         help="SAM2 model type: sam2_hiera_{tiny,small,base_plus,large} or sam2.1_hiera_{tiny,small,base_plus,large}.",
     )
@@ -187,25 +203,7 @@ if __name__ == "__main__":
 
     input_size = (1024, 1024)
     multimask_output = True
-    model_type = args.model_type
-    if model_type == "sam2_hiera_tiny":
-        model_cfg = "sam2_hiera_t.yaml"
-    elif model_type == "sam2_hiera_small":
-        model_cfg = "sam2_hiera_s.yaml"
-    elif model_type == "sam2_hiera_base_plus":
-        model_cfg = "sam2_hiera_b+.yaml"
-    elif model_type == "sam2_hiera_large":
-        model_cfg = "sam2_hiera_l.yaml"
-    elif model_type == "sam2.1_hiera_tiny":
-        model_cfg = "sam2.1/sam2.1_hiera_t.yaml"
-    elif model_type == "sam2.1_hiera_small":
-        model_cfg = "sam2.1/sam2.1_hiera_s.yaml"
-    elif model_type == "sam2.1_hiera_base_plus":
-        model_cfg = "sam2.1/sam2.1_hiera_b+.yaml"
-    elif model_type == "sam2.1_hiera_large":
-        model_cfg = "sam2.1/sam2.1_hiera_l.yaml"
-    else:
-        model_cfg = "sam2_hiera_l.yaml"
+    model_cfg = MODEL_CONFIGS[args.model_type]
 
     # Register the config directory with Hydra
     import os

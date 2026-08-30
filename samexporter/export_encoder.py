@@ -8,10 +8,14 @@ from tempfile import mkdtemp
 import onnx
 import torch
 from onnx.external_data_helper import convert_model_to_external_data
-from segment_anything import sam_model_registry
 
 from samexporter.mobile_encoder.setup_mobile_sam import setup_model
 from samexporter.onnx_utils import ImageEncoderOnnxModel
+from samexporter.upstream import prefer_pinned_upstream
+
+prefer_pinned_upstream("sam1")
+
+from segment_anything import sam_model_registry  # noqa: E402
 
 parser = argparse.ArgumentParser(
     description="Export the SAM image encoder to an ONNX model."
@@ -33,7 +37,7 @@ parser.add_argument(
 
 parser.add_argument(
     "--model-type",
-    type=str,
+    choices=("default", "vit_h", "vit_l", "vit_b", "mobile"),
     required=True,
     help="In ['default', 'vit_h', 'vit_l', 'vit_b', 'mobile']. "
     "Which type of SAM model to export.",
@@ -42,7 +46,7 @@ parser.add_argument(
 parser.add_argument(
     "--use-preprocess",
     action="store_true",
-    help=("Embed pre-processing into the model",),
+    help="Embed pre-processing into the model",
 )
 
 parser.add_argument(
@@ -83,7 +87,7 @@ def run_export(
 ):
     print("Loading model...")
     if model_type == "mobile":
-        checkpoint = torch.load(checkpoint, map_location="cpu")
+        checkpoint = torch.load(checkpoint, map_location="cpu", weights_only=True)
         sam = setup_model()
         sam.load_state_dict(checkpoint, strict=True)
     else:
@@ -122,6 +126,7 @@ def run_export(
     output_names = ["image_embeddings"]
 
     onnx_base = os.path.splitext(os.path.basename(output))[0]
+    pathlib.Path(output).parent.mkdir(parents=True, exist_ok=True)
     with warnings.catch_warnings():
         warnings.filterwarnings("ignore", category=torch.jit.TracerWarning)
         warnings.filterwarnings("ignore", category=UserWarning)
@@ -143,7 +148,6 @@ def run_export(
             )
 
             # Combine the weights into a single file
-            pathlib.Path(output).parent.mkdir(parents=True, exist_ok=True)
             onnx_model = onnx.load(tmp_model_path)
             convert_model_to_external_data(
                 onnx_model,
@@ -193,6 +197,7 @@ if __name__ == "__main__":
         from onnxruntime.quantization.quantize import quantize_dynamic  # type: ignore
 
         print(f"Quantizing model and writing to {args.quantize_out}...")
+        pathlib.Path(args.quantize_out).parent.mkdir(parents=True, exist_ok=True)
         quantize_dynamic(
             model_input=args.output,
             model_output=args.quantize_out,

@@ -1,17 +1,19 @@
 #!/bin/bash
 # test_all_models.sh
 
-set -e
+set -euo pipefail
 
-mkdir -p test_outputs
+OUT_DIR="${SAMEXPORTER_RESULTS_DIR:-visual_results/runs/all_models}"
+mkdir -p "$OUT_DIR"
 
 run_test() {
     local variant=$1
     local encoder=$2
     local decoder=$3
     local prompt_file=$4
-    local output="test_outputs/${variant}_$(basename $encoder .onnx)_result.png"
-    local extra_args=$5
+    local output="${OUT_DIR}/${variant}_$(basename "$encoder" .onnx)_result.png"
+    local log="${output%.png}.log"
+    local extra_args=${5:-}
 
     echo "Testing $variant with $encoder ..."
     python -m samexporter.inference \
@@ -21,7 +23,7 @@ run_test() {
         --image images/truck.jpg \
         --prompt "$prompt_file" \
         --output "$output" \
-        $extra_args
+        $extra_args 2>&1 | tee "$log"
 
     if [ -f "$output" ]; then
         echo "  [OK] Saved to $output"
@@ -37,7 +39,7 @@ run_test "sam" "output_models/sam_vit_l_0b3195.encoder.onnx" "output_models/sam_
 run_test "sam" "output_models/sam_vit_b_01ec64.encoder.onnx" "output_models/sam_vit_b_01ec64.decoder.onnx" "images/truck_prompt.json"
 
 echo -e "\n=== Testing Mobile SAM ==="
-run_test "sam" "output_models/mobile_sam/mobile_sam.encoder.onnx" "output_models/mobile_sam/sam_vit_h_4b8939.decoder.onnx" "images/truck_prompt.json"
+run_test "sam" "output_models/mobile_sam/mobile_sam.encoder.onnx" "output_models/mobile_sam/mobile_sam.decoder.onnx" "images/truck_prompt.json"
 
 echo -e "\n=== Testing SAM 2 ==="
 run_test "sam2" "output_models/sam2_hiera_tiny.encoder.onnx" "output_models/sam2_hiera_tiny.decoder.onnx" "images/truck_prompt.json"

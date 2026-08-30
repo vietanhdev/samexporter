@@ -1,0 +1,26 @@
+libpng warning: iCCP: known incorrect sRGB profile
+[0;93m2026-08-30 21:34:04.506122554 [W:onnxruntime:, graph.cc:124 MergeShapeInfo] Error merging shape info for output. '/trunk/Concat_output_0' source:{4} target:{5}. Falling back to lenient merge.[m
+SAM3 instances retained: 5
+	Command being timed: "python -m samexporter.inference --sam_variant sam3 --encoder_model /tmp/samexporter_sam3/onnx/sam3_image_encoder.onnx --language_encoder_model /tmp/samexporter_sam3/onnx/sam3_language_encoder.onnx --decoder_model /tmp/samexporter_sam3/onnx/sam3_decoder.onnx --image images/plants.png --prompt images/plants_text.json --max_instances 5 --output visual_results/sam3/plants_text_top5.png --providers cpu"
+	User time (seconds): 192.97
+	System time (seconds): 6.88
+	Percent of CPU this job got: 628%
+	Elapsed (wall clock) time (h:mm:ss or m:ss): 0:31.81
+	Average shared text size (kbytes): 0
+	Average unshared data size (kbytes): 0
+	Average stack size (kbytes): 0
+	Average total size (kbytes): 0
+	Maximum resident set size (kbytes): 8589760
+	Average resident set size (kbytes): 0
+	Major (requiring I/O) page faults: 0
+	Minor (reclaiming a frame) page faults: 3134895
+	Voluntary context switches: 3436
+	Involuntary context switches: 354438
+	Swaps: 0
+	File system inputs: 0
+	File system outputs: 3472
+	Socket messages sent: 0
+	Socket messages received: 0
+	Signals delivered: 0
+	Page size (bytes): 4096
+	Exit status: 0

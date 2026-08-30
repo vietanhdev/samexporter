@@ -1,0 +1,42 @@
+Traceback (most recent call last):
+  File "<stdin>", line 7, in <module>
+  File "/home/vietanhdev/Workspaces/samexporter/samexporter/sam3_onnx.py", line 21, in __init__
+    self.image_encoder = SAM3ImageEncoder(image_encoder_path, providers)
+                         ~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/vietanhdev/Workspaces/samexporter/samexporter/sam3_onnx.py", line 207, in __init__
+    self.session = onnxruntime.InferenceSession(
+                   ~~~~~~~~~~~~~~~~~~~~~~~~~~~~^
+        path, providers=get_onnx_providers(providers)
+        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    )
+    ^
+  File "/home/vietanhdev/miniconda3/lib/python3.13/site-packages/onnxruntime/capi/onnxruntime_inference_collection.py", line 534, in __init__
+    self._create_inference_session(providers, provider_options, disabled_optimizers)
+    ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/vietanhdev/miniconda3/lib/python3.13/site-packages/onnxruntime/capi/onnxruntime_inference_collection.py", line 629, in _create_inference_session
+    sess = C.InferenceSession(session_options, self._model_path, True, self._read_config_from_model)
+onnxruntime.capi.onnxruntime_pybind11_state.NoSuchFile: [ONNXRuntimeError] : 3 : NO_SUCHFILE : Load model from /tmp/samexporter_sam3/onnx/sam3_image_encoder.onnx failed:Load model /tmp/samexporter_sam3/onnx/sam3_image_encoder.onnx failed. File doesn't exist
+Command exited with non-zero status 1
+	Command being timed: "python -"
+	User time (seconds): 1.62
+	System time (seconds): 0.04
+	Percent of CPU this job got: 736%
+	Elapsed (wall clock) time (h:mm:ss or m:ss): 0:00.22
+	Average shared text size (kbytes): 0
+	Average unshared data size (kbytes): 0
+	Average stack size (kbytes): 0
+	Average total size (kbytes): 0
+	Maximum resident set size (kbytes): 75524
+	Average resident set size (kbytes): 0
+	Major (requiring I/O) page faults: 266
+	Minor (reclaiming a frame) page faults: 8793
+	Voluntary context switches: 462
+	Involuntary context switches: 312
+	Swaps: 0
+	File system inputs: 64792
+	File system outputs: 248
+	Socket messages sent: 0
+	Socket messages received: 0
+	Signals delivered: 0
+	Page size (bytes): 4096
+	Exit status: 1

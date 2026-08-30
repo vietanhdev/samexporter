@@ -1,7 +1,7 @@
 #!/bin/bash
 # download_all_models.sh
 
-set -e
+set -euo pipefail
 
 OUT_DIR="original_models"
 mkdir -p "$OUT_DIR"
@@ -13,7 +13,10 @@ download_file() {
         echo "  [SKIP] Already exists: $dest"
     else
         echo "  Downloading $dest ..."
-        curl -L "$url" -o "$dest"
+        mkdir -p "$(dirname "$dest")"
+        curl --fail --location --retry 3 --continue-at - \
+            "$url" --output "$dest.part"
+        mv "$dest.part" "$dest"
         echo "  [OK] $dest"
     fi
 }
@@ -29,6 +32,12 @@ echo -e "
 download_file "https://github.com/ChaoningZhang/MobileSAM/raw/master/weights/mobile_sam.pt" "$OUT_DIR/mobile_sam.pt"
 
 echo -e "
+=== EfficientSAM-Ti (ONNX) ==="
+mkdir -p output_models/efficient_sam
+download_file "https://huggingface.co/nrl-ai/samexporter-onnx-models/resolve/main/efficient_sam_ti/efficientsam_ti_encoder.onnx" "output_models/efficient_sam/efficientsam_ti_encoder.onnx"
+download_file "https://huggingface.co/nrl-ai/samexporter-onnx-models/resolve/main/efficient_sam_ti/efficientsam_ti_decoder.onnx" "output_models/efficient_sam/efficientsam_ti_decoder.onnx"
+
+echo -e "
 === Segment Anything 2 (SAM 2) ==="
 download_file "https://dl.fbaipublicfiles.com/segment_anything_2/072824/sam2_hiera_tiny.pt" "$OUT_DIR/sam2_hiera_tiny.pt"
 download_file "https://dl.fbaipublicfiles.com/segment_anything_2/072824/sam2_hiera_small.pt" "$OUT_DIR/sam2_hiera_small.pt"
@@ -42,16 +51,14 @@ download_file "https://dl.fbaipublicfiles.com/segment_anything_2/092824/sam2.1_h
 download_file "https://dl.fbaipublicfiles.com/segment_anything_2/092824/sam2.1_hiera_large.pt" "$OUT_DIR/sam2.1_hiera_large.pt"
 
 echo -e "\n=== Segment Anything 3 (SAM 3) ==="
-# SAM3 is a zip file containing multiple components
-if [ -f "output_models/sam3/sam3_image_encoder.onnx" ]; then
-    echo "  [SKIP] SAM3 already exported or present in output_models/sam3"
-else
-    # We download the zip if not already present
-    download_file "https://huggingface.co/vietanhdev/segment-anything-3-onnx-models/resolve/main/sam3_vit_h.zip" "$OUT_DIR/sam3_vit_h.zip"
-    echo "  Extracting SAM3 models..."
-    mkdir -p output_models/sam3
-    unzip -o "$OUT_DIR/sam3_vit_h.zip" -d output_models/sam3
-fi
+# SAM3 uses one external-data companion file for its decoder. Check every file
+# independently so an interrupted or partial prior download is repaired.
+mkdir -p output_models/sam3
+SAMEXPORTER_HF="https://huggingface.co/nrl-ai/samexporter-onnx-models/resolve/main/sam3"
+download_file "$SAMEXPORTER_HF/sam3_image_encoder.onnx" "output_models/sam3/sam3_image_encoder.onnx"
+download_file "$SAMEXPORTER_HF/sam3_language_encoder.onnx" "output_models/sam3/sam3_language_encoder.onnx"
+download_file "$SAMEXPORTER_HF/sam3_decoder.onnx" "output_models/sam3/sam3_decoder.onnx"
+download_file "$SAMEXPORTER_HF/sam3_decoder.onnx.data" "output_models/sam3/sam3_decoder.onnx.data"
 
 echo -e "
 All downloads complete!"

@@ -9,8 +9,14 @@ import pathlib
 import warnings
 
 import torch
-from segment_anything import sam_model_registry
-from segment_anything.utils.onnx import SamOnnxModel
+
+from samexporter.mobile_encoder.setup_mobile_sam import setup_model
+from samexporter.upstream import prefer_pinned_upstream
+
+prefer_pinned_upstream("sam1")
+
+from segment_anything import sam_model_registry  # noqa: E402
+from segment_anything.utils.onnx import SamOnnxModel  # noqa: E402
 
 try:
     import onnxruntime  # type: ignore
@@ -39,9 +45,9 @@ parser.add_argument(
 
 parser.add_argument(
     "--model-type",
-    type=str,
+    choices=("default", "vit_h", "vit_l", "vit_b", "mobile"),
     required=True,
-    help="In ['default', 'vit_h', 'vit_l', 'vit_b']. "
+    help="In ['default', 'vit_h', 'vit_l', 'vit_b', 'mobile']. "
     "Which type of SAM model to export.",
 )
 
@@ -113,7 +119,12 @@ def run_export(
     return_extra_metrics=False,
 ):
     print("Loading model...")
-    sam = sam_model_registry[model_type](checkpoint=checkpoint)
+    if model_type == "mobile":
+        state_dict = torch.load(checkpoint, map_location="cpu", weights_only=True)
+        sam = setup_model()
+        sam.load_state_dict(state_dict, strict=True)
+    else:
+        sam = sam_model_registry[model_type](checkpoint=checkpoint)
 
     onnx_model = SamOnnxModel(
         model=sam,
@@ -202,6 +213,7 @@ if __name__ == "__main__":
         from onnxruntime.quantization.quantize import quantize_dynamic  # type: ignore
 
         print(f"Quantizing model and writing to {args.quantize_out}...")
+        pathlib.Path(args.quantize_out).parent.mkdir(parents=True, exist_ok=True)
         quantize_dynamic(
             model_input=args.output,
             model_output=args.quantize_out,

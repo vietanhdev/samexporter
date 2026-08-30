@@ -1,56 +1,39 @@
-import logging
 from copy import deepcopy
 
 import cv2
 import numpy as np
 import onnxruntime
+from PIL import Image
 
-logging.basicConfig(level=logging.DEBUG)
+from samexporter.prompts import geometric_prompt_arrays
+from samexporter.runtime import get_onnx_providers
 
 
 class SegmentAnythingONNX:
     """Segmentation model using Segment Anything (SAM)"""
 
-    def __init__(self, encoder_model_path, decoder_model_path) -> None:
+    def __init__(self, encoder_model_path, decoder_model_path, providers=None) -> None:
         self.target_size = 1024
-        self.input_size = (684, 1024)
 
         # Load models
-        providers = onnxruntime.get_available_providers()
-
-        # Pop TensorRT Runtime due to crashing issues
-        # TODO: Add back when TensorRT backend is stable
-        providers = [p for p in providers if p != "TensorrtExecutionProvider"]
-
-        if providers:
-            logging.info(
-                "Available providers for ONNXRuntime: %s", ", ".join(providers)
-            )
-        else:
-            logging.warning("No available providers for ONNXRuntime")
+        providers = get_onnx_providers(providers)
         self.encoder_session = onnxruntime.InferenceSession(
             encoder_model_path, providers=providers
         )
-        self.encoder_input_name = self.encoder_session.get_inputs()[0].name
+        encoder_input = self.encoder_session.get_inputs()[0]
+        self.encoder_input_name = encoder_input.name
+        self.encoder_input_shape = encoder_input.shape
+        self.encoder_input_rank = len(encoder_input.shape)
         self.decoder_session = onnxruntime.InferenceSession(
             decoder_model_path, providers=providers
         )
+        self.decoder_output_names = [
+            model_output.name for model_output in self.decoder_session.get_outputs()
+        ]
 
     def get_input_points(self, prompt):
         """Get input points"""
-        points = []
-        labels = []
-        for mark in prompt:
-            if mark["type"] == "point":
-                points.append(mark["data"])
-                labels.append(mark["label"])
-            elif mark["type"] == "rectangle":
-                points.append([mark["data"][0], mark["data"][1]])  # top left
-                points.append([mark["data"][2], mark["data"][3]])  # bottom right
-                labels.append(2)
-                labels.append(3)
-        points, labels = np.array(points), np.array(labels)
-        return points, labels
+        return geometric_prompt_arrays(prompt)
 
     def run_encoder(self, encoder_inputs):
         """Run encoder"""
@@ -83,7 +66,7 @@ class SegmentAnythingONNX:
         coords[..., 1] = coords[..., 1] * (new_h / old_h)
         return coords
 
-    def run_decoder(self, image_embedding, original_size, transform_matrix, prompt):
+    def run_decoder(self, image_embedding, original_size, resized_size, prompt):
         """Run decoder"""
         input_points, input_labels = self.get_input_points(prompt)
 
@@ -95,19 +78,8 @@ class SegmentAnythingONNX:
             None, :
         ].astype(np.float32)
         onnx_coord = self.apply_coords(
-            onnx_coord, self.input_size, self.target_size
+            onnx_coord, original_size, self.target_size
         ).astype(np.float32)
-
-        # Apply the transformation matrix to the coordinates.
-        onnx_coord = np.concatenate(
-            [
-                onnx_coord,
-                np.ones((1, onnx_coord.shape[1], 1), dtype=np.float32),
-            ],
-            axis=2,
-        )
-        onnx_coord = np.matmul(onnx_coord, transform_matrix.T)
-        onnx_coord = onnx_coord[:, :, :2].astype(np.float32)
 
         # Create an empty mask input and an indicator for no mask.
         onnx_mask_input = np.zeros((1, 1, 256, 256), dtype=np.float32)
@@ -119,17 +91,61 @@ class SegmentAnythingONNX:
             "point_labels": onnx_label,
             "mask_input": onnx_mask_input,
             "has_mask_input": onnx_has_mask_input,
-            "orig_im_size": np.array(self.input_size, dtype=np.float32),
+            "orig_im_size": np.array(original_size, dtype=np.float32),
         }
-        masks, _, _ = self.decoder_session.run(None, decoder_inputs)
+        outputs = self.decoder_session.run(None, decoder_inputs)
 
-        # Transform the masks back to the original image size.
-        inv_transform_matrix = np.linalg.inv(transform_matrix)
-        transformed_masks = self.transform_masks(
-            masks, original_size, inv_transform_matrix
+        # The segment-anything 1.0 ONNX wrapper converts a tensor-derived crop
+        # size to Python ``int`` during tracing. That freezes the export to the
+        # dummy image's landscape ratio. Prefer low-resolution logits and do
+        # the standard resize/crop/resize here so every aspect ratio remains
+        # correct (including portrait and extreme panoramas).
+        if "low_res_masks" in self.decoder_output_names:
+            masks = outputs[self.decoder_output_names.index("low_res_masks")]
+            return self.postprocess_masks(masks, original_size, resized_size)
+
+        masks = outputs[0]
+        if masks.shape[-2:] != tuple(original_size):
+            return self.resize_masks(masks, original_size)
+        return masks
+
+    def postprocess_masks(self, masks, original_size, resized_size):
+        """Apply SAM's aspect-ratio-aware mask postprocessing outside ONNX."""
+        output_masks = []
+        for batch in masks:
+            batch_masks = []
+            for mask in batch:
+                upscaled = cv2.resize(
+                    mask,
+                    (self.target_size, self.target_size),
+                    interpolation=cv2.INTER_LINEAR,
+                )
+                cropped = upscaled[: resized_size[0], : resized_size[1]]
+                batch_masks.append(
+                    cv2.resize(
+                        cropped,
+                        (original_size[1], original_size[0]),
+                        interpolation=cv2.INTER_LINEAR,
+                    )
+                )
+            output_masks.append(batch_masks)
+        return np.asarray(output_masks)
+
+    @staticmethod
+    def resize_masks(masks, original_size):
+        return np.asarray(
+            [
+                [
+                    cv2.resize(
+                        mask,
+                        (original_size[1], original_size[0]),
+                        interpolation=cv2.INTER_LINEAR,
+                    )
+                    for mask in batch
+                ]
+                for batch in masks
+            ]
         )
-
-        return transformed_masks
 
     def transform_masks(self, masks, original_size, transform_matrix):
         """Transform the masks back to the original image size."""
@@ -152,34 +168,48 @@ class SegmentAnythingONNX:
         """
         Calculate embedding and metadata for a single image.
         """
+        if cv_image is None or cv_image.ndim != 3 or cv_image.shape[2] != 3:
+            raise ValueError("Expected a non-empty BGR image with three channels")
         original_size = cv_image.shape[:2]
+        resized_size = self.get_preprocess_shape(*original_size, self.target_size)
+        rgb_image = cv2.cvtColor(cv_image, cv2.COLOR_BGR2RGB)
+        # Match official ResizeLongestSide.apply_image exactly. OpenCV's
+        # sampler can move thin/ambiguous point-prompt boundaries enough to
+        # select a different mask, especially after large downscales.
+        rgb_image = np.asarray(
+            Image.fromarray(rgb_image).resize(
+                (resized_size[1], resized_size[0]),
+                resample=Image.Resampling.BILINEAR,
+            )
+        )
 
-        # Calculate a transformation matrix to convert to self.input_size
-        scale_x = self.input_size[1] / cv_image.shape[1]
-        scale_y = self.input_size[0] / cv_image.shape[0]
-        scale = min(scale_x, scale_y)
-        transform_matrix = np.array(
-            [
-                [scale, 0, 0],
-                [0, scale, 0],
-                [0, 0, 1],
-            ]
-        )
-        cv_image = cv2.warpAffine(
-            cv_image,
-            transform_matrix[:2],
-            (self.input_size[1], self.input_size[0]),
-            flags=cv2.INTER_LINEAR,
-        )
+        if self.encoder_input_rank == 3:
+            # Encoder exported with --use-preprocess: dynamic HWC RGB input.
+            input_image = rgb_image.astype(np.float32)
+        elif self.encoder_input_rank == 4:
+            # Encoder exported without preprocessing: normalized, padded NCHW.
+            input_image = rgb_image.astype(np.float32)
+            mean = np.asarray([123.675, 116.28, 103.53], dtype=np.float32)
+            std = np.asarray([58.395, 57.12, 57.375], dtype=np.float32)
+            input_image = (input_image - mean) / std
+            input_image = input_image.transpose(2, 0, 1)
+            pad_h = self.target_size - resized_size[0]
+            pad_w = self.target_size - resized_size[1]
+            input_image = np.pad(input_image, ((0, 0), (0, pad_h), (0, pad_w)))
+            input_image = input_image[None].astype(np.float32)
+        else:
+            raise ValueError(
+                f"Unsupported SAM encoder input rank: {self.encoder_input_rank}"
+            )
 
         encoder_inputs = {
-            self.encoder_input_name: cv_image.astype(np.float32),
+            self.encoder_input_name: input_image,
         }
         image_embedding = self.run_encoder(encoder_inputs)
         return {
             "image_embedding": image_embedding,
             "original_size": original_size,
-            "transform_matrix": transform_matrix,
+            "resized_size": resized_size,
         }
 
     def predict_masks(self, embedding, prompt):
@@ -189,7 +219,7 @@ class SegmentAnythingONNX:
         masks = self.run_decoder(
             embedding["image_embedding"],
             embedding["original_size"],
-            embedding["transform_matrix"],
+            embedding["resized_size"],
             prompt,
         )
 

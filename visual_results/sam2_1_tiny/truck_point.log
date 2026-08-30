@@ -1,0 +1,4 @@
+[0;93m2026-08-30 21:44:11.802843379 [W:onnxruntime:, graph.cc:124 MergeShapeInfo] Error merging shape info for output. '/image_encoder/trunk/Concat_3_output_0' source:{4} target:{5}. Falling back to lenient merge.[m
+infer time: 1222.32 ms
+infer time: 43.61 ms
+elapsed_s=2.72 max_rss_kb=1145708

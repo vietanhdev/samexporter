@@ -1,3 +1,9 @@
 [submodule "sam3"]
 	path = sam3
 	url = https://github.com/facebookresearch/sam3.git
+[submodule "third_party/segment-anything"]
+	path = third_party/segment-anything
+	url = https://github.com/facebookresearch/segment-anything.git
+[submodule "third_party/sam2"]
+	path = third_party/sam2
+	url = https://github.com/facebookresearch/sam2.git
