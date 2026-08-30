@@ -1,3 +1,7 @@
+#!/usr/bin/env bash
+
+set -euo pipefail
+
 echo "Converting all models..."
 
 echo "Converting ViT-H models..."

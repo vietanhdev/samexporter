@@ -4,15 +4,16 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "samexporter"
-version = "0.4.6"
-description = "Exporting Segment Anything models ONNX format"
+version = "0.5.0"
+description = "Export and run SAM, MobileSAM, EfficientSAM, SAM2, and SAM3 with ONNX Runtime"
 authors = [
     {name = "Viet Anh Nguyen", email = "vietanh.dev@gmail.com"},
 ]
 readme = "README.md"
 requires-python = ">=3.11"
 license = "MIT"
-license-files = ["LICENSE"]
+license-files = ["LICENSE", "third_party_licenses/*"]
+keywords = ["sam", "segment-anything", "onnx", "onnxruntime", "segmentation"]
 classifiers = [
     "Programming Language :: Python :: 3.11",
     "Programming Language :: Python :: 3.12",
@@ -22,40 +23,56 @@ classifiers = [
 
 dependencies = [
     "onnx==1.20.1",
-    "onnxruntime==1.24.2",
     "opencv-python==4.11.0.86",
     "segment-anything==1.0",
     "torch==2.10.0",
     "torchvision==0.25.0",
-    "timm==0.9.2",
-    "numpy==1.26.4",
+    "timm>=0.9.16,<2",
+    "numpy>=1.26,<3",
     "onnxscript==0.6.2",
-    "osam",  # CLIP tokeniser for SAM3 text prompts
+    "ftfy>=6.1,<7",
+    "regex>=2023.0.0",
 ]
 
 [project.urls]
 "Homepage" = "https://github.com/vietanhdev/samexporter"
 "Bug Tracker" = "https://github.com/vietanhdev/samexporter/issues"
+"Documentation" = "https://anylearning-oss.nrl.ai/docs/samexporter"
+"Models" = "https://huggingface.co/nrl-ai/samexporter-onnx-models"
 
 [project.optional-dependencies]
 # onnxsim has no Windows wheel; the source tarball exceeds Windows 260-char
 # path limits.  Install with: pip install samexporter[export]
 export = ["onnxsim==0.5.0"]
-dev = ["ruff", "pre-commit", "pytest"]
+runtime-cpu = ["onnxruntime==1.24.2"]
+runtime-gpu = ["onnxruntime-gpu>=1.24,<2"]
+runtime-openvino = ["onnxruntime-openvino>=1.23,<2"]
+runtime-directml = ["onnxruntime-directml>=1.23,<2"]
+runtime-qnn = ["onnxruntime-qnn>=1.23,<2"]
+dev = ["onnxruntime==1.24.2", "ruff", "pre-commit", "pytest"]
 
 [tool.setuptools]
-packages = ["samexporter", "samexporter.mobile_encoder", "samexporter.sam2_configs"]
+packages = [
+    "samexporter",
+    "samexporter.assets",
+    "samexporter.mobile_encoder",
+    "samexporter.sam2_configs",
+]
 
 [tool.setuptools.package-data]
 "samexporter.sam2_configs" = ["*.yaml", "sam2.1/*.yaml"]
+"samexporter.assets" = ["*.gz"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
+pythonpath = ["."]
 
 [tool.ruff]
 line-length = 88
 target-version = "py311"
-exclude = [".git", "__pycache__", "build", "dist", "*.egg-info", "sam3"]
+exclude = [
+    ".git", "__pycache__", "build", "dist", "*.egg-info", "sam3", "third_party",
+]
 
 [tool.ruff.lint]
 select = ["E", "W", "F", "I", "UP"]

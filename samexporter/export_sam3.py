@@ -2,17 +2,26 @@ import argparse
 import os
 import pathlib
 import sys
-from unittest.mock import MagicMock
+import types
 
 import onnx
 import torch
 from torchvision.transforms import v2
 
-# Mock triton for Windows – must happen before any sam3 imports.
-mock_triton = MagicMock()
-sys.modules["triton"] = mock_triton
-sys.modules["triton.language"] = MagicMock()
-sys.modules["torch._inductor.runtime.triton_helpers"] = MagicMock()
+from samexporter.upstream import prefer_pinned_upstream
+
+# SAM3 can import optional Triton helpers on Windows, where Triton is normally
+# unavailable. Never replace a real Linux Triton installation: doing so breaks
+# PyTorch CUDA's lazy kernel registration.
+if os.name == "nt":
+    from importlib.machinery import ModuleSpec
+    from unittest.mock import MagicMock
+
+    mock_triton = MagicMock()
+    mock_triton.__spec__ = ModuleSpec("triton", loader=None)
+    sys.modules.setdefault("triton", mock_triton)
+    sys.modules.setdefault("triton.language", MagicMock())
+    sys.modules.setdefault("torch._inductor.runtime.triton_helpers", MagicMock())
 
 # Ensure sam3 is in PYTHONPATH
 
@@ -21,11 +30,10 @@ samexporter_root = os.path.abspath(os.path.join(os.path.dirname(__file__), "..")
 # Submodule is at samexporter/sam3.
 # Package 'sam3' is at samexporter/sam3/sam3.
 # So we add samexporter/sam3 to sys.path.
-sys.path.append(os.path.join(samexporter_root, "sam3"))
+prefer_pinned_upstream("sam3")
 sys.path.append(samexporter_root)
 
 try:
-    from osam._models.yoloworld.clip import tokenize
     from sam3.model.sam3_image import Sam3Image
     from sam3.model.sam3_image_processor import Sam3Processor
     from sam3.model_builder import build_sam3_image_model
@@ -38,25 +46,44 @@ except ImportError as e:
     def build_sam3_image_model():
         return None
 
-    def tokenize(x):
-        return None
 
-
-def get_replace_freqs_cis(module: torch.nn.Module) -> None:
+def prepare_rope_buffers_for_onnx(module: torch.nn.Module) -> None:
     """Replace complex freqs_cis buffers with separate real/imag float buffers.
 
     ONNX does not support complex-valued tensors, so the complex RoPE
     (rotary positional embedding) buffer must be split into its real
     (cosine) and imaginary (sine) components before export.
     """
-    if hasattr(module, "freqs_cis"):
-        freqs_cos = module.freqs_cis.real.float()
-        freqs_sin = module.freqs_cis.imag.float()
-        module.register_buffer("freqs_cos", freqs_cos)
-        module.register_buffer("freqs_sin", freqs_sin)
-        del module.freqs_cis
+    # Current SAM3 already registers real/imaginary buffers. Keep freqs_cis:
+    # upstream _apply_rope still asserts that the complex buffer exists.
+    freqs_cis = getattr(module, "freqs_cis", None)
+    if freqs_cis is not None:
+        if not hasattr(module, "freqs_cis_real"):
+            module.register_buffer("freqs_cis_real", freqs_cis.real.float())
+            module.register_buffer("freqs_cis_imag", freqs_cis.imag.float())
+        if hasattr(module, "use_rope_real"):
+            module.use_rope_real = True
     for child in module.children():
-        get_replace_freqs_cis(child)
+        prepare_rope_buffers_for_onnx(child)
+
+
+def prepare_fused_mlps_for_onnx(module: torch.nn.Module) -> None:
+    """Replace SAM3's inference-only BF16 fused MLP with exportable FP32 ops."""
+
+    def forward(mlp, value):
+        value = mlp.fc1(value)
+        value = mlp.act(value)
+        value = mlp.drop1(value)
+        value = mlp.norm(value)
+        value = mlp.fc2(value)
+        return mlp.drop2(value)
+
+    for child in module.modules():
+        if (
+            child.__class__.__name__ == "Mlp"
+            and child.__class__.__module__ == "sam3.model.vitdet"
+        ):
+            child.forward = types.MethodType(forward, child)
 
 
 class SAM3ImageEncoder(torch.nn.Module):
@@ -72,7 +99,10 @@ class SAM3ImageEncoder(torch.nn.Module):
 
     def __init__(self, processor: Sam3Processor) -> None:
         super().__init__()
-        self._processor: Sam3Processor = processor
+        # Register the backbone as a real child module. Keeping it reachable
+        # only through the non-Module processor makes the exporter treat every
+        # trainable weight as an invalid requires-grad constant.
+        self._backbone = processor.model.backbone
         # Normalise uint8 [0,255] to float [-1, 1] – identical to the
         # reference sam3-onnx export (export_onnx.py).
         self._transform = v2.Compose(
@@ -82,10 +112,11 @@ class SAM3ImageEncoder(torch.nn.Module):
             ]
         )
 
+    @torch.no_grad()
     def forward(self, image: torch.Tensor) -> tuple[torch.Tensor, ...]:
         # image: (3, H, W) uint8 → normalise → (1, 3, H, W) float
         image = self._transform(image).unsqueeze(0)
-        backbone_out = self._processor.model.backbone._forward_image_no_act_ckpt(image)
+        backbone_out = self._backbone._forward_image_no_act_ckpt(image)
         # Remove keys that are not needed by the decoder and would add
         # unnecessary overhead to the ONNX graph.
         backbone_out.pop("vision_features", None)
@@ -98,12 +129,13 @@ class SAM3ImageEncoder(torch.nn.Module):
 class SAM3LanguageEncoder(torch.nn.Module):
     def __init__(self, processor: Sam3Processor) -> None:
         super().__init__()
-        self._processor: Sam3Processor = processor
+        self._model: Sam3Image = processor.model
 
+    @torch.no_grad()
     def forward(
         self, tokens: torch.Tensor
     ) -> tuple[torch.Tensor, torch.Tensor, torch.Tensor]:
-        model: Sam3Image = self._processor.model
+        model = self._model
 
         # VETextEncoder forward pass
         text_attention_mask = (tokens != 0).bool()
@@ -126,7 +158,13 @@ class SAM3Decoder(torch.nn.Module):
         super().__init__()
         self._model = model
         self._processor = processor
+        # PCS ignores point prompts, but its geometry encoder still needs a
+        # well-shaped point sequence when boxes are padded to a fixed capacity.
+        self.register_buffer("_point_embedding", torch.zeros(1, 1, 2))
+        self.register_buffer("_point_mask", torch.ones(1, 1, dtype=torch.bool))
+        self.register_buffer("_point_label", torch.ones(1, 1, dtype=torch.long))
 
+    @torch.no_grad()
     def forward(
         self,
         original_height: torch.Tensor,
@@ -148,6 +186,9 @@ class SAM3Decoder(torch.nn.Module):
         geometric_prompt.box_embeddings = box_coords
         geometric_prompt.box_labels = box_labels
         geometric_prompt.box_mask = box_masks
+        geometric_prompt.point_embeddings = self._point_embedding
+        geometric_prompt.point_labels = self._point_label
+        geometric_prompt.point_mask = self._point_mask
         state = {
             "original_height": original_height,
             "original_width": original_width,
@@ -168,20 +209,56 @@ class SAM3Decoder(torch.nn.Module):
             },
             "geometric_prompt": geometric_prompt,
         }
-        result = self._processor._forward_grounding(state)
-        return result["boxes"], result["scores"], result["masks"]
+        # Export raw heads. Keeping thresholding and original-resolution mask
+        # resizing outside ONNX allows runtime confidence and image dimensions
+        # to remain fully dynamic, matching the official Sam3Processor logic.
+        result = self._model.forward_grounding(
+            backbone_out=state["backbone_out"],
+            find_input=self._processor.find_stage,
+            geometric_prompt=state["geometric_prompt"],
+            find_target=None,
+        )
+        return (
+            result["pred_boxes"],
+            result["pred_logits"],
+            result["pred_masks"],
+            result["presence_logit_dec"],
+        )
 
 
-def export_sam3(output_dir: str, opset: int = 18, simplify_model: bool = False):
+def export_sam3(
+    output_dir: str,
+    opset: int = 18,
+    simplify_model: bool = False,
+    checkpoint_path: str | None = None,
+    device: str = "auto",
+    max_geometric_prompts: int = 8,
+):
+    if max_geometric_prompts < 1:
+        raise ValueError("max_geometric_prompts must be at least 1")
     output_dir = pathlib.Path(output_dir)
     output_dir.mkdir(parents=True, exist_ok=True)
 
-    model = build_sam3_image_model()
+    if device == "auto":
+        if torch.cuda.is_available():
+            device = "cuda"
+        elif torch.backends.mps.is_available():
+            device = "mps"
+        else:
+            device = "cpu"
+    model = build_sam3_image_model(
+        checkpoint_path=checkpoint_path,
+        load_from_HF=checkpoint_path is None,
+        device=device,
+    )
     # Replace complex RoPE buffers with float cos/sin – required for ONNX.
-    get_replace_freqs_cis(model)
+    prepare_rope_buffers_for_onnx(model)
+    # The current upstream ViT uses a CUDA BF16-only fused addmm/GELU helper.
+    # Standard FP32 layers preserve the same MLP semantics and are portable to
+    # ONNX Runtime providers.
+    prepare_fused_mlps_for_onnx(model)
     processor = Sam3Processor(model)
-    device = "cuda" if torch.cuda.is_available() else "cpu"
-    model.to(device)
+    model.eval().to(device)
 
     # ── Image Encoder ────────────────────────────────────────────────────────
     print("Exporting Image Encoder...")
@@ -231,55 +308,74 @@ def export_sam3(output_dir: str, opset: int = 18, simplify_model: bool = False):
 
     # ── Decoder ──────────────────────────────────────────────────────────────
     print("Exporting Decoder...")
-    decoder = SAM3Decoder(model, processor)
+    decoder = SAM3Decoder(model, processor).eval().to(device)
     decoder_path = output_dir / "sam3_decoder.onnx"
 
-    box_coords = torch.zeros(1, 1, 4).to(device)
-    box_labels = torch.ones(1, 1, dtype=torch.long).to(device)
-    # box_masks=True means "no real box" (dummy / masked out).
-    box_masks = torch.ones(1, 1, dtype=torch.bool).to(device)
+    # Geometry is sequence-first: [num_marks, batch, coordinates].
+    box_coords = torch.zeros(max_geometric_prompts, 1, 4).to(device)
+    box_labels = torch.ones(max_geometric_prompts, 1, dtype=torch.long).to(device)
+    # Trace one real neutral slot plus right-padding. Tracing with every slot
+    # masked can make upstream attention hit an all-masked softmax/FPE.
+    box_coords[0, 0] = torch.tensor([0.5, 0.5, 0.01, 0.01], device=device)
+    box_masks = torch.ones(1, max_geometric_prompts, dtype=torch.bool).to(device)
+    box_masks[0, 0] = False
     orig_h = torch.tensor(1008).to(device)
     orig_w = torch.tensor(1008).to(device)
 
-    torch.onnx.utils.export(
-        decoder,
-        args=(
-            orig_h,
-            orig_w,
-            vpe0,
-            vpe1,
-            vpe2,
-            fpn0,
-            fpn1,
-            fpn2,
-            l_mask,
-            l_feat,
-            l_embed,
-            box_coords,
-            box_labels,
-            box_masks,
-        ),
-        f=str(decoder_path),
-        export_params=True,
-        input_names=[
-            "original_height",
-            "original_width",
-            "vision_pos_enc_0",
-            "vision_pos_enc_1",
-            "vision_pos_enc_2",
-            "backbone_fpn_0",
-            "backbone_fpn_1",
-            "backbone_fpn_2",
-            "language_mask",
-            "language_features",
-            "language_embeds",
-            "box_coords",
-            "box_labels",
-            "box_masks",
-        ],
-        output_names=["boxes", "scores", "masks"],
-        opset_version=opset,
-    )
+    # The legacy tracer crashes in torchvision's multi-box RoIAlign symbolic.
+    # Dynamo handles the fixed padded geometry path and produces portable ONNX.
+    original_pin_memory = torch.Tensor.pin_memory
+    original_is_dynamo_compiling = torch.compiler.is_dynamo_compiling
+    torch.Tensor.pin_memory = lambda tensor: tensor
+    torch.compiler.is_dynamo_compiling = lambda: True
+    try:
+        torch.onnx.export(
+            decoder,
+            args=(
+                orig_h,
+                orig_w,
+                vpe0,
+                vpe1,
+                vpe2,
+                fpn0,
+                fpn1,
+                fpn2,
+                l_mask,
+                l_feat,
+                l_embed,
+                box_coords,
+                box_labels,
+                box_masks,
+            ),
+            f=str(decoder_path),
+            input_names=[
+                "original_height",
+                "original_width",
+                "vision_pos_enc_0",
+                "vision_pos_enc_1",
+                "vision_pos_enc_2",
+                "backbone_fpn_0",
+                "backbone_fpn_1",
+                "backbone_fpn_2",
+                "language_mask",
+                "language_features",
+                "language_embeds",
+                "box_coords",
+                "box_labels",
+                "box_masks",
+            ],
+            output_names=[
+                "pred_boxes",
+                "pred_logits",
+                "pred_masks",
+                "presence_logit_dec",
+            ],
+            opset_version=opset,
+            dynamo=True,
+        )
+    finally:
+        torch.Tensor.pin_memory = original_pin_memory
+        torch.compiler.is_dynamo_compiling = original_is_dynamo_compiling
     print(f"Saved Decoder to {decoder_path}")
 
     # ── Simplify models conditionally ─────────────────────────────────────────
@@ -308,5 +404,29 @@ if __name__ == "__main__":
     )
     parser.add_argument("--opset", type=int, default=18, help="ONNX opset version")
     parser.add_argument("--simplify", action="store_true", help="Simplify ONNX models")
+    parser.add_argument(
+        "--checkpoint",
+        default=None,
+        help="Local official SAM3 checkpoint; otherwise download from Hugging Face",
+    )
+    parser.add_argument(
+        "--device",
+        choices=("auto", "cpu", "cuda", "mps"),
+        default="auto",
+        help="PyTorch device used during export",
+    )
+    parser.add_argument(
+        "--max-geometric-prompts",
+        type=int,
+        default=8,
+        help="Fixed padded capacity for rectangle/point prompts (default: 8)",
+    )
     args = parser.parse_args()
-    export_sam3(args.output_dir, args.opset, args.simplify)
+    export_sam3(
+        args.output_dir,
+        args.opset,
+        args.simplify,
+        args.checkpoint,
+        args.device,
+        args.max_geometric_prompts,
+    )

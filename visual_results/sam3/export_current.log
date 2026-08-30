@@ -1,0 +1,106 @@
+/home/vietanhdev/Workspaces/samexporter/sam3/sam3/model_builder.py:8: UserWarning: pkg_resources is deprecated as an API. See https://setuptools.pypa.io/en/latest/pkg_resources.html. The pkg_resources package is slated for removal as early as 2025-11-30. Refrain from using this package or pin to Setuptools<81.
+  import pkg_resources
+/home/vietanhdev/miniconda3/lib/python3.13/site-packages/timm/models/layers/__init__.py:49: FutureWarning: Importing from timm.models.layers is deprecated, please import via timm.layers
+  warnings.warn(f"Importing from {__name__} is deprecated, please import via timm.layers", FutureWarning)
+/home/vietanhdev/Workspaces/samexporter/sam3/sam3/model/vitdet.py:251: TracerWarning: Converting a tensor to a Python float might cause the trace to be incorrect. We can't record the data flow of Python values, so this value will be treated as a constant in the future. This means that the trace might not generalize to other inputs!
+  size = int(math.sqrt(xy_num))
+/home/vietanhdev/Workspaces/samexporter/sam3/sam3/model/vitdet.py:252: TracerWarning: Converting a tensor to a Python boolean might cause the trace to be incorrect. We can't record the data flow of Python values, so this value will be treated as a constant in the future. This means that the trace might not generalize to other inputs!
+  assert size * size == xy_num
+/home/vietanhdev/Workspaces/samexporter/sam3/sam3/model/vitdet.py:254: TracerWarning: Converting a tensor to a Python boolean might cause the trace to be incorrect. We can't record the data flow of Python values, so this value will be treated as a constant in the future. This means that the trace might not generalize to other inputs!
+  if size != h or size != w:
+/home/vietanhdev/Workspaces/samexporter/sam3/sam3/model/vitdet.py:154: TracerWarning: Converting a tensor to a Python boolean might cause the trace to be incorrect. We can't record the data flow of Python values, so this value will be treated as a constant in the future. This means that the trace might not generalize to other inputs!
+  if pad_h > 0 or pad_w > 0:
+/home/vietanhdev/Workspaces/samexporter/sam3/sam3/sam/rope.py:100: TracerWarning: Converting a tensor to a Python boolean might cause the trace to be incorrect. We can't record the data flow of Python values, so this value will be treated as a constant in the future. This means that the trace might not generalize to other inputs!
+  assert xk.shape[-2] != 0
+/home/vietanhdev/Workspaces/samexporter/sam3/sam3/sam/rope.py:53: TracerWarning: Converting a tensor to a Python boolean might cause the trace to be incorrect. We can't record the data flow of Python values, so this value will be treated as a constant in the future. This means that the trace might not generalize to other inputs!
+  assert freqs_cis.shape == (x.shape[-2], x.shape[-1])
+/home/vietanhdev/Workspaces/samexporter/sam3/sam3/model/vitdet.py:184: TracerWarning: Converting a tensor to a Python boolean might cause the trace to be incorrect. We can't record the data flow of Python values, so this value will be treated as a constant in the future. This means that the trace might not generalize to other inputs!
+  if Hp > H or Wp > W:
+/home/vietanhdev/Workspaces/samexporter/samexporter/export_sam3.py:145: TracerWarning: Converting a tensor to a Python boolean might cause the trace to be incorrect. We can't record the data flow of Python values, so this value will be treated as a constant in the future. This means that the trace might not generalize to other inputs!
+  assert text_memory.shape[1] == inputs_embeds.shape[1]
+/home/vietanhdev/miniconda3/lib/python3.13/copyreg.py:99: FutureWarning: `isinstance(treespec, LeafSpec)` is deprecated, use `isinstance(treespec, TreeSpec) and treespec.is_leaf()` instead.
+  return cls.__new__(cls, *args)
+/home/vietanhdev/miniconda3/lib/python3.13/site-packages/onnxscript/function_libs/torch_lib/ops/vision.py:69: UserWarning: ONNX export for RoIAlign with a non-zero sampling_ratio is not supported. The model will be exported with a sampling_ratio of 0.
+  sampling_ratio = _process_sampling_ratio_for_roi_align(sampling_ratio)
+WARNING:onnxscript.optimizer._constant_folding:Skipping constant folding for op Split with multiple outputs.
+WARNING:onnxscript.optimizer._constant_folding:Skipping constant folding for op Split with multiple outputs.
+WARNING:onnxscript.optimizer._constant_folding:Skipping constant folding for op Split with multiple outputs.
+WARNING:onnxscript.optimizer._constant_folding:Skipping constant folding for op Split with multiple outputs.
+WARNING:onnxscript.optimizer._constant_folding:Skipping constant folding for op Split with multiple outputs.
+WARNING:onnxscript.optimizer._constant_folding:Skipping constant folding for op Split with multiple outputs.
+WARNING:onnxscript.optimizer._constant_folding:Skipping constant folding for op Split with multiple outputs.
+WARNING:onnxscript.optimizer._constant_folding:Skipping constant folding for op Split with multiple outputs.
+WARNING:onnxscript.optimizer._constant_folding:Skipping constant folding for op Split with multiple outputs.
+WARNING:onnxscript.optimizer._constant_folding:Skipping constant folding for op Split with multiple outputs.
+WARNING:onnxscript.optimizer._constant_folding:Skipping constant folding for op Split with multiple outputs.
+WARNING:onnxscript.optimizer._constant_folding:Skipping constant folding for op Split with multiple outputs.
+WARNING:onnxscript.optimizer._constant_folding:Skipping constant folding for op Split with multiple outputs.
+WARNING:onnxscript.optimizer._constant_folding:Skipping constant folding for op Split with multiple outputs.
+WARNING:onnxscript.optimizer._constant_folding:Skipping constant folding for op Split with multiple outputs.
+WARNING:onnxscript.optimizer._constant_folding:Skipping constant folding for op Split with multiple outputs.
+WARNING:onnxscript.optimizer._constant_folding:Skipping constant folding for op Split with multiple outputs.
+WARNING:onnxscript.optimizer._constant_folding:Skipping constant folding for op Split with multiple outputs.
+WARNING:onnxscript.optimizer._constant_folding:Skipping constant folding for op Split with multiple outputs.
+WARNING:onnxscript.optimizer._constant_folding:Skipping constant folding for op Split with multiple outputs.
+WARNING:onnxscript.optimizer._constant_folding:Skipping constant folding for op Split with multiple outputs.
+WARNING:onnxscript.optimizer._constant_folding:Skipping constant folding for op Split with multiple outputs.
+WARNING:onnxscript.optimizer._constant_folding:Skipping constant folding for op Split with multiple outputs.
+WARNING:onnxscript.optimizer._constant_folding:Skipping constant folding for op Split with multiple outputs.
+WARNING:onnxscript.optimizer._constant_folding:Skipping constant folding for op Split with multiple outputs.
+WARNING:onnxscript.optimizer._constant_folding:Skipping constant folding for op Split with multiple outputs.
+WARNING:onnxscript.optimizer._constant_folding:Skipping constant folding for op Split with multiple outputs.
+WARNING:onnxscript.optimizer._constant_folding:Skipping constant folding for op Split with multiple outputs.
+WARNING:onnxscript.optimizer._constant_folding:Skipping constant folding for op Split with multiple outputs.
+WARNING:onnxscript.optimizer._constant_folding:Skipping constant folding for op Split with multiple outputs.
+WARNING:onnxscript.optimizer._constant_folding:Skipping constant folding for op Split with multiple outputs.
+WARNING:onnxscript.optimizer._constant_folding:Skipping constant folding for op Split with multiple outputs.
+WARNING:onnxscript.optimizer._constant_folding:Skipping constant folding for op Split with multiple outputs.
+WARNING:onnxscript.optimizer._constant_folding:Skipping constant folding for op Split with multiple outputs.
+WARNING:onnxscript.optimizer._constant_folding:Skipping constant folding for op Split with multiple outputs.
+WARNING:onnxscript.optimizer._constant_folding:Skipping constant folding for op Split with multiple outputs.
+WARNING:onnxscript.optimizer._constant_folding:Skipping constant folding for op Split with multiple outputs.
+WARNING:onnxscript.optimizer._constant_folding:Skipping constant folding for op Split with multiple outputs.
+WARNING:onnxscript.optimizer._constant_folding:Skipping constant folding for op Split with multiple outputs.
+WARNING:onnxscript.optimizer._constant_folding:Skipping constant folding for op Split with multiple outputs.
+WARNING:onnxscript.optimizer._constant_folding:Skipping constant folding for op Split with multiple outputs.
+WARNING:onnxscript.optimizer._constant_folding:Skipping constant folding for op Split with multiple outputs.
+WARNING:onnxscript.optimizer._constant_folding:Skipping constant folding for op Split with multiple outputs.
+WARNING:onnxscript.optimizer._constant_folding:Skipping constant folding for op Split with multiple outputs.
+WARNING:onnxscript.optimizer._constant_folding:Skipping constant folding for op Split with multiple outputs.
+WARNING:onnxscript.optimizer._constant_folding:Skipping constant folding for op Split with multiple outputs.
+WARNING:onnxscript.optimizer._constant_folding:Skipping constant folding for op Split with multiple outputs.
+WARNING:onnxscript.optimizer._constant_folding:Skipping constant folding for op Split with multiple outputs.
+WARNING:onnxscript.optimizer._constant_folding:Skipping constant folding for op Split with multiple outputs.
+WARNING:onnxscript.optimizer._constant_folding:Skipping constant folding for op Split with multiple outputs.
+WARNING:onnxscript.optimizer._constant_folding:Skipping constant folding for op Split with multiple outputs.
+WARNING:onnxscript.optimizer._constant_folding:Skipping constant folding for op Split with multiple outputs.
+WARNING:onnxscript.optimizer._constant_folding:Skipping constant folding for op Split with multiple outputs.
+WARNING:onnxscript.optimizer._constant_folding:Skipping constant folding for op Split with multiple outputs.
+WARNING:onnxscript.optimizer._constant_folding:Skipping constant folding for op Split with multiple outputs.
+WARNING:onnxscript.optimizer._constant_folding:Skipping constant folding for op Split with multiple outputs.
+WARNING:onnxscript.optimizer._constant_folding:Skipping constant folding for op Split with multiple outputs.
+WARNING:onnxscript.optimizer._constant_folding:Skipping constant folding for op Split with multiple outputs.
+WARNING:onnxscript.optimizer._constant_folding:Skipping constant folding for op Split with multiple outputs.
+WARNING:onnxscript.optimizer._constant_folding:Skipping constant folding for op Split with multiple outputs.
+WARNING:onnxscript.optimizer._constant_folding:Skipping constant folding for op Split with multiple outputs.
+WARNING:onnxscript.optimizer._constant_folding:Skipping constant folding for op Split with multiple outputs.
+WARNING:onnxscript.optimizer._constant_folding:Skipping constant folding for op Split with multiple outputs.
+WARNING:onnxscript.optimizer._constant_folding:Skipping constant folding for op Split with multiple outputs.
+WARNING:onnxscript.optimizer._constant_folding:Skipping constant folding for op Split with multiple outputs.
+WARNING:onnxscript.optimizer._constant_folding:Skipping constant folding for op Split with multiple outputs.
+WARNING:onnxscript.optimizer._constant_folding:Skipping constant folding for op Split with multiple outputs.
+WARNING:onnxscript.optimizer._constant_folding:Skipping constant folding for op Split with multiple outputs.
+Exporting Image Encoder...
+Saved Image Encoder to /tmp/samexporter_sam3/onnx/sam3_image_encoder.onnx
+Exporting Language Encoder...
+Saved Language Encoder to /tmp/samexporter_sam3/onnx/sam3_language_encoder.onnx
+Exporting Decoder...
+[torch.onnx] Obtain model graph for `SAM3Decoder([...]` with `torch.export.export(..., strict=False)`...
+[torch.onnx] Obtain model graph for `SAM3Decoder([...]` with `torch.export.export(..., strict=False)`... ✅
+[torch.onnx] Run decompositions...
+[torch.onnx] Run decompositions... ✅
+[torch.onnx] Translate the graph into ONNX...
+[torch.onnx] Translate the graph into ONNX... ✅
+[torch.onnx] Optimize the ONNX graph...
+[torch.onnx] Optimize the ONNX graph... ✅
+Saved Decoder to /tmp/samexporter_sam3/onnx/sam3_decoder.onnx

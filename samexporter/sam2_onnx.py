@@ -6,14 +6,18 @@ import numpy as np
 import onnxruntime
 from numpy import ndarray
 
+from samexporter.prompts import geometric_prompt_arrays
+from samexporter.runtime import get_onnx_providers
+
 
 class SegmentAnything2ONNX:
     """Segmentation model using Segment Anything 2 (SAM2)"""
 
-    def __init__(self, encoder_model_path, decoder_model_path) -> None:
-        self.encoder = SAM2ImageEncoder(encoder_model_path)
+    def __init__(self, encoder_model_path, decoder_model_path, providers=None) -> None:
+        providers = get_onnx_providers(providers)
+        self.encoder = SAM2ImageEncoder(encoder_model_path, providers)
         self.decoder = SAM2ImageDecoder(
-            decoder_model_path, self.encoder.input_shape[2:]
+            decoder_model_path, self.encoder.input_shape[2:], providers=providers
         )
 
     def encode(self, cv_image: np.ndarray) -> list[np.ndarray]:
@@ -27,18 +31,7 @@ class SegmentAnything2ONNX:
         }
 
     def predict_masks(self, embedding, prompt) -> list[np.ndarray]:
-        points = []
-        labels = []
-        for mark in prompt:
-            if mark["type"] == "point":
-                points.append(mark["data"])
-                labels.append(mark["label"])
-            elif mark["type"] == "rectangle":
-                points.append([mark["data"][0], mark["data"][1]])  # top left
-                points.append([mark["data"][2], mark["data"][3]])  # bottom right
-                labels.append(2)
-                labels.append(3)
-        points, labels = np.array(points), np.array(labels)
+        points, labels = geometric_prompt_arrays(prompt)
 
         image_embedding = embedding["image_embedding"]
         high_res_feats_0 = embedding["high_res_feats_0"]
@@ -74,10 +67,10 @@ class SegmentAnything2ONNX:
 
 
 class SAM2ImageEncoder:
-    def __init__(self, path: str) -> None:
+    def __init__(self, path: str, providers=None) -> None:
         # Initialize model
         self.session = onnxruntime.InferenceSession(
-            path, providers=onnxruntime.get_available_providers()
+            path, providers=get_onnx_providers(providers)
         )
 
         # Get model info
@@ -144,10 +137,11 @@ class SAM2ImageDecoder:
         encoder_input_size: tuple[int, int],
         orig_im_size: tuple[int, int] = None,
         mask_threshold: float = 0.0,
+        providers=None,
     ) -> None:
         # Initialize model
         self.session = onnxruntime.InferenceSession(
-            path, providers=onnxruntime.get_available_providers()
+            path, providers=get_onnx_providers(providers)
         )
 
         self.orig_im_size = (
@@ -222,7 +216,7 @@ class SAM2ImageDecoder:
             ),
             dtype=np.float32,
         )
-        has_mask_input = np.array([0], dtype=np.float32)
+        has_mask_input = np.zeros(num_labels, dtype=np.float32)
 
         return (
             image_embed,
@@ -241,8 +235,8 @@ class SAM2ImageDecoder:
     ) -> tuple[np.ndarray, np.ndarray]:
 
         if isinstance(point_coords, np.ndarray):
-            input_point_coords = point_coords[np.newaxis, ...]
-            input_point_labels = point_labels[np.newaxis, ...]
+            input_point_coords = point_coords[np.newaxis, ...].copy()
+            input_point_labels = np.asarray(point_labels)[np.newaxis, ...].copy()
         else:
             max_num_points = max([coords.shape[0] for coords in point_coords])
             # We need to make sure that all inputs have the same number of points

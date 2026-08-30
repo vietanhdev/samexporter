@@ -14,13 +14,14 @@ jobs:
       name: pypi
       url: https://pypi.org/p/samexporter
     permissions:
+      contents: read
       id-token: write  # Mandatory for trusted publishing (OIDC)
     steps:
-    - uses: actions/checkout@v3
+    - uses: actions/checkout@v7
     - name: Set up Python
-      uses: actions/setup-python@v4
+      uses: actions/setup-python@v6
       with:
-        python-version: "3.x"
+        python-version: "3.13"
     - name: Install pypa/build
       run: >-
         python -m pip install build==1.2.2 twine==6.1.0 --user

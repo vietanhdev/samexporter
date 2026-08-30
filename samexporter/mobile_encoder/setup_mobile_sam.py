@@ -1,11 +1,15 @@
-from segment_anything.modeling import (
+from samexporter.upstream import prefer_pinned_upstream
+
+prefer_pinned_upstream("sam1")
+
+from segment_anything.modeling import (  # noqa: E402
     MaskDecoder,
     PromptEncoder,
     Sam,
     TwoWayTransformer,
 )
 
-from samexporter.mobile_encoder.tiny_vit_sam import TinyViT
+from samexporter.mobile_encoder.tiny_vit_sam import TinyViT  # noqa: E402
 
 
 def setup_model():

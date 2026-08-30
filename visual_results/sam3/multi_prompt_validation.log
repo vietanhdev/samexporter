@@ -1,0 +1,50 @@
+[0;93m2026-08-30 18:28:33.032410084 [W:onnxruntime:, graph.cc:124 MergeShapeInfo] Error merging shape info for output. '/trunk/Concat_output_0' source:{4} target:{5}. Falling back to lenient merge.[m
+libpng warning: iCCP: known incorrect sRGB profile
+libpng warning: iCCP: known incorrect sRGB profile
+[1;31m2026-08-30 18:29:27.499919761 [E:onnxruntime:, sequential_executor.cc:671 ExecuteKernel] Non-zero status code returned while running Split node. Name:'/geometry_encoder/Split_1' Status Message: Cannot split using values in 'split' attribute. Axis=0 Input shape={2,1,4} NumOutputs=1 Num entries in 'split' (must equal number of outputs) was 1 Sum of sizes in 'split' (must equal size of selected axis) was 1[m
+truck_text shape [1, 1, 1200, 1800] areas [0.29458842592592593] encode_s 19.043 decode_s 3.672
+truck_box shape [1, 1, 1200, 1800] areas [0.2890041666666667] encode_s 0.0 decode_s 3.153
+truck_point shape [0, 1, 1200, 1800] areas [] encode_s 0.0 decode_s 3.707
+plants_text shape [20, 1, 1481, 987] areas [0.013403824328012987, 0.006603741960818117, 0.0034061981998252775, 0.010622221218856615, 0.004746375398752315, 0.05556091444005016, 0.003844030464916295, 0.005373022828163834, 0.006700885994635187, 0.018206981098644295, 0.011179089131019252, 0.011217399454214717, 0.002850014400576844, 0.008543202072588485, 0.004404318941649958, 0.011023111386580579, 0.000697111059574605, 0.0060181413062588805, 0.016191584453397204, 0.0017793776898464646] encode_s 16.843 decode_s 3.233
+Traceback (most recent call last):
+  File "<stdin>", line 28, in <module>
+  File "/home/vietanhdev/Workspaces/samexporter/samexporter/sam3_onnx.py", line 155, in predict_masks
+    masks, scores, _boxes = self.decoder(
+                            ~~~~~~~~~~~~^
+        original_size,
+        ^^^^^^^^^^^^^^
+    ...<11 lines>...
+        box_masks_np,
+        ^^^^^^^^^^^^^
+    )
+    ^
+  File "/home/vietanhdev/Workspaces/samexporter/samexporter/sam3_onnx.py", line 348, in __call__
+    outputs = self.session.run(None, model_inputs)
+  File "/home/vietanhdev/miniconda3/lib/python3.13/site-packages/onnxruntime/capi/onnxruntime_inference_collection.py", line 326, in run
+    return self._sess.run(output_names, input_feed, run_options)
+           ~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+onnxruntime.capi.onnxruntime_pybind11_state.Fail: [ONNXRuntimeError] : 1 : FAIL : Non-zero status code returned while running Split node. Name:'/geometry_encoder/Split_1' Status Message: Cannot split using values in 'split' attribute. Axis=0 Input shape={2,1,4} NumOutputs=1 Num entries in 'split' (must equal number of outputs) was 1 Sum of sizes in 'split' (must equal size of selected axis) was 1
+Command exited with non-zero status 1
+	Command being timed: "python -"
+	User time (seconds): 360.17
+	System time (seconds): 18.96
+	Percent of CPU this job got: 663%
+	Elapsed (wall clock) time (h:mm:ss or m:ss): 0:57.11
+	Average shared text size (kbytes): 0
+	Average unshared data size (kbytes): 0
+	Average stack size (kbytes): 0
+	Average total size (kbytes): 0
+	Maximum resident set size (kbytes): 12572016
+	Average resident set size (kbytes): 0
+	Major (requiring I/O) page faults: 8
+	Minor (reclaiming a frame) page faults: 4351383
+	Voluntary context switches: 75914
+	Involuntary context switches: 1404254
+	Swaps: 0
+	File system inputs: 1392
+	File system outputs: 17448
+	Socket messages sent: 0
+	Socket messages received: 0
+	Signals delivered: 0
+	Page size (bytes): 4096
+	Exit status: 1

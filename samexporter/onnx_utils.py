@@ -1,7 +1,12 @@
 import torch
 import torch.nn as nn
-from segment_anything.modeling import Sam
-from torch.nn import functional as F
+
+from samexporter.upstream import prefer_pinned_upstream
+
+prefer_pinned_upstream("sam1")
+
+from segment_anything.modeling import Sam  # noqa: E402
+from torch.nn import functional as F  # noqa: E402
 
 
 class ImageEncoderOnnxModel(nn.Module):

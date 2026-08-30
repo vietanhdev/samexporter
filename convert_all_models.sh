@@ -1,7 +1,7 @@
 #!/bin/bash
 # convert_all_models.sh
 
-set -e
+set -euo pipefail
 
 export KMP_DUPLICATE_LIB_OK=TRUE
 
@@ -24,7 +24,7 @@ python -m samexporter.export_decoder --checkpoint original_models/sam_vit_b_01ec
 
 echo -e "\n=== Converting Mobile SAM ==="
 python -m samexporter.export_encoder --checkpoint original_models/mobile_sam.pt --output output_models/mobile_sam/mobile_sam.encoder.onnx --model-type mobile --quantize-out output_models/mobile_sam/mobile_sam.encoder.quant.onnx --use-preprocess
-python -m samexporter.export_decoder --checkpoint original_models/sam_vit_h_4b8939.pth --output output_models/mobile_sam/sam_vit_h_4b8939.decoder.onnx --model-type vit_h --quantize-out output_models/mobile_sam/sam_vit_h_4b8939.decoder.quant.onnx --return-single-mask
+python -m samexporter.export_decoder --checkpoint original_models/mobile_sam.pt --output output_models/mobile_sam/mobile_sam.decoder.onnx --model-type mobile --quantize-out output_models/mobile_sam/mobile_sam.decoder.quant.onnx --return-single-mask
 
 echo -e "\n=== Converting Segment Anything 2 (SAM 2) ==="
 

@@ -23,9 +23,9 @@ Actual model I/O (from sam3_decoder.onnx inspection):
     backbone_fpn_2    [1, 256, 72, 72]     float
     language_mask     [1, 32]              bool
     language_features [32, 1, 256]         float
-    box_coords        [1, 1, 4]            float
-    box_labels        [1, 1]               int64
-    box_masks         [1, 1]               bool
+    box_coords        [capacity, 1, 4]     float
+    box_labels        [capacity, 1]        int64
+    box_masks         [1, capacity]        bool
   Decoder outputs:
     [0] boxes   (N, 4)           float
     [1] scores  (N,)             float
@@ -87,9 +87,9 @@ _DECODER_INPUT_SPECS = [
     ("backbone_fpn_2", [1, 256, 72, 72], "tensor(float)"),
     ("language_mask", [1, 32], "tensor(bool)"),
     ("language_features", [32, 1, 256], "tensor(float)"),
-    ("box_coords", [1, 1, 4], "tensor(float)"),
-    ("box_labels", [1, 1], "tensor(int64)"),
-    ("box_masks", [1, 1], "tensor(bool)"),
+    ("box_coords", [8, 1, 4], "tensor(float)"),
+    ("box_labels", [8, 1], "tensor(int64)"),
+    ("box_masks", [1, 8], "tensor(bool)"),
 ]
 
 _ENCODER_INPUT_SPECS = [
@@ -157,12 +157,13 @@ class TestSAM3OnnxRectanglePrompt(unittest.TestCase):
         inputs = args[1]
         self.assertIn("box_coords", inputs)
         np.testing.assert_allclose(
-            inputs["box_coords"],
-            np.array([[[0.5, 0.5, 0.5, 0.6]]], dtype=np.float32),
+            inputs["box_coords"][0, 0],
+            np.array([0.5, 0.5, 0.5, 0.6], dtype=np.float32),
             atol=1e-5,
         )
         # box_masks should be False (real box provided).
-        self.assertFalse(inputs["box_masks"].all())
+        self.assertFalse(inputs["box_masks"][0, 0])
+        self.assertTrue(inputs["box_masks"][0, 1:].all())
 
     @patch("onnxruntime.InferenceSession")
     def test_empty_prompt_uses_dummy_box(self, MockSession):
@@ -242,10 +243,163 @@ class TestSAM3OnnxPointPrompt(unittest.TestCase):
         args, _kwargs = dec_sess.run.call_args
         inputs = args[1]
         np.testing.assert_allclose(
-            inputs["box_coords"],
-            np.array([[[0.5, 0.5, 0.01, 0.01]]], dtype=np.float32),
+            inputs["box_coords"][0, 0],
+            np.array([0.5, 0.5, 0.01, 0.01], dtype=np.float32),
             atol=1e-5,
         )
+
+    @patch("onnxruntime.InferenceSession")
+    def test_multiple_geometric_prompts_are_forwarded(self, MockSession):
+        enc_sess = _make_mock_session(_ENCODER_INPUT_SPECS)
+        dec_sess = _make_mock_session(
+            _DECODER_INPUT_SPECS,
+            run_return=[
+                np.zeros((0, 4), dtype=np.float32),
+                np.zeros((0,), dtype=np.float32),
+                np.zeros((0, 1, 100, 200), dtype=np.bool_),
+            ],
+        )
+        MockSession.side_effect = [enc_sess, dec_sess]
+        model = SegmentAnything3ONNX("enc.onnx", "dec.onnx")
+        embedding = {
+            "original_size": (100, 200),
+            **{
+                name: np.zeros(1)
+                for name in (
+                    "vision_pos_enc_0",
+                    "vision_pos_enc_1",
+                    "vision_pos_enc_2",
+                    "backbone_fpn_0",
+                    "backbone_fpn_1",
+                    "backbone_fpn_2",
+                    "language_embeds",
+                )
+            },
+            "language_mask": np.zeros((1, 32), dtype=np.bool_),
+            "language_features": np.zeros((32, 1, 256), dtype=np.float32),
+        }
+
+        model.predict_masks(
+            embedding,
+            [
+                {"type": "rectangle", "data": [10, 20, 50, 80]},
+                {"type": "point", "data": [100, 50], "label": 0},
+            ],
+        )
+        inputs = dec_sess.run.call_args.args[1]
+        self.assertEqual(inputs["box_coords"].shape, (8, 1, 4))
+        np.testing.assert_array_equal(inputs["box_labels"][:2], [[1], [0]])
+        self.assertFalse(inputs["box_masks"][0, :2].any())
+        self.assertTrue(inputs["box_masks"][0, 2:].all())
+
+        with self.assertRaisesRegex(ValueError, "at most 8 geometric prompts"):
+            model.predict_masks(
+                embedding,
+                [{"type": "point", "data": [100, 50], "label": 1} for _ in range(9)],
+            )
+
+
+# ---------------------------------------------------------------------------
+# SAM3 query selection tests (pure NumPy, no model session)
+# ---------------------------------------------------------------------------
+
+
+class TestSAM3DetectionSelection(unittest.TestCase):
+    def setUp(self):
+        self.masks = np.zeros((3, 1, 100, 100), dtype=np.bool_)
+        self.masks[0, 0, 10:50, 10:50] = True
+        self.masks[1, 0, 12:49, 12:49] = True
+        self.masks[2, 0, 60:90, 60:90] = True
+        self.scores = np.array([0.8, 0.7, 0.95], dtype=np.float32)
+        self.boxes = np.array(
+            [[10, 10, 50, 50], [12, 12, 49, 49], [60, 60, 90, 90]],
+            dtype=np.float32,
+        )
+
+    def select(self, prompt, **overrides):
+        options = {
+            "confidence_threshold": 0.5,
+            "nms_threshold": 0.5,
+            "nms_mode": "mask",
+            "max_instances": None,
+            "prefer_prompted_region": False,
+        }
+        options.update(overrides)
+        return SegmentAnything3ONNX.select_detections(
+            self.masks, self.scores, self.boxes, prompt, **options
+        )
+
+    def test_nms_removes_duplicate_queries_and_preserves_score_order(self):
+        masks, scores, boxes = self.select([])
+
+        self.assertEqual(len(masks), 2)
+        np.testing.assert_allclose(scores, [0.95, 0.8])
+        np.testing.assert_array_equal(boxes, [self.boxes[2], self.boxes[0]])
+
+    def test_box_nms_is_available_as_an_explicit_fast_mode(self):
+        _, scores, boxes = self.select([], nms_mode="box")
+
+        np.testing.assert_allclose(scores, [0.95, 0.8])
+        np.testing.assert_array_equal(boxes, [self.boxes[2], self.boxes[0]])
+
+    def test_nms_can_be_disabled(self):
+        _, scores, _ = self.select([], nms_mode="none")
+        np.testing.assert_allclose(scores, [0.95, 0.8, 0.7])
+
+    def test_rectangle_selection_prefers_prompted_region_before_confidence(self):
+        masks, scores, boxes = self.select(
+            [{"type": "rectangle", "data": [10, 10, 50, 50]}],
+            max_instances=1,
+            prefer_prompted_region=True,
+        )
+
+        self.assertEqual(len(masks), 1)
+        self.assertAlmostEqual(float(scores[0]), 0.8, places=5)
+        np.testing.assert_array_equal(boxes[0], self.boxes[0])
+
+    def test_positive_point_selection_uses_mask_membership(self):
+        _, scores, boxes = self.select(
+            [{"type": "point", "data": [20, 20], "label": 1}],
+            max_instances=1,
+            prefer_prompted_region=True,
+        )
+
+        self.assertAlmostEqual(float(scores[0]), 0.8, places=5)
+        np.testing.assert_array_equal(boxes[0], self.boxes[0])
+
+    def test_confidence_filter_and_instance_limit(self):
+        _, scores, _ = self.select(
+            [], confidence_threshold=0.75, nms_threshold=None, max_instances=1
+        )
+        np.testing.assert_allclose(scores, [0.95])
+
+    def test_empty_and_invalid_selection_inputs(self):
+        masks, scores, boxes = self.select([], confidence_threshold=0.99)
+        self.assertEqual(masks.shape, (0, 1, 100, 100))
+        self.assertEqual(scores.shape, (0,))
+        self.assertEqual(boxes.shape, (0, 4))
+
+        for options, message in (
+            ({"confidence_threshold": -0.1}, "confidence_threshold"),
+            ({"nms_threshold": 1.1}, "nms_threshold"),
+            ({"nms_mode": "invalid"}, "nms_mode"),
+            ({"max_instances": 0}, "max_instances"),
+        ):
+            with self.assertRaisesRegex(ValueError, message):
+                self.select([], **options)
+
+        with self.assertRaisesRegex(ValueError, "equal lengths"):
+            SegmentAnything3ONNX.select_detections(
+                self.masks[:2],
+                self.scores,
+                self.boxes,
+                [],
+                confidence_threshold=0.5,
+                nms_threshold=0.7,
+                nms_mode="mask",
+                max_instances=None,
+                prefer_prompted_region=False,
+            )
 
 
 # ---------------------------------------------------------------------------
@@ -349,6 +503,19 @@ class TestSAM3ImageDecoder(unittest.TestCase):
         np.testing.assert_array_equal(ret_masks, masks)
         np.testing.assert_array_equal(ret_scores, scores)
         np.testing.assert_array_equal(ret_boxes, boxes)
+
+    def test_raw_head_postprocessing_matches_official_contract(self):
+        raw = {
+            "pred_boxes": np.array([[[0.5, 0.5, 0.5, 0.4]]], np.float32),
+            "pred_logits": np.array([[[2.0]]], np.float32),
+            "pred_masks": np.ones((1, 1, 2, 2), np.float32),
+            "presence_logit_dec": np.array([[1.0]], np.float32),
+        }
+        masks, scores, boxes = SAM3ImageDecoder.postprocess_raw_outputs(raw, (100, 200))
+        self.assertEqual(masks.shape, (1, 1, 100, 200))
+        self.assertTrue(masks.all())
+        self.assertAlmostEqual(float(scores[0]), 0.6439, places=3)
+        np.testing.assert_allclose(boxes, [[50, 30, 150, 70]], atol=1e-5)
 
     @patch("onnxruntime.InferenceSession")
     def test_dummy_language_inputs_when_none(self, MockSession):
